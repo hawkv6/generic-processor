@@ -8,6 +8,7 @@ inputs:
   - kafka:
     name: jalapeno-kafka
     url: kafka:9092
+    input_topic: openconfig
 
 outputs:
   - arango:
@@ -20,7 +21,6 @@ outputs:
 processors:
   - ArangoDocumentCreater:
     input: jalapeno-kafka
-    input_topic: openconfig
     output: jalapeno-arango
     ouput_document: mdt.openconfig  
   - ArangoDocumentEnricher:
