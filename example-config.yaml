@@ -1,19 +1,19 @@
 inputs:
   - influx:
     name: jalapeno-influx
-    url: http://influxdb:8086
+    url: http://172.16.19.76:8086
     db: mdt_db
     username: jalapeno
     password: jalapeno
   - kafka:
-    name: jalapeno-kafka
+    name: 172.16.19.77:9094
     url: kafka:9092
     input_topic: openconfig
 
 outputs:
   - arango:
     name: jalapeno-arango
-    url: 
+    url: https://arango-hawkv6.dev.network.garden/
     database: jalapeno
     username: root
     password: jalapeno
