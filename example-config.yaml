@@ -1,45 +1,173 @@
 inputs:
-  - influx:
-    name: jalapeno-influx
-    url: http://172.16.19.76:8086
-    db: mdt_db
-    username: jalapeno
-    password: jalapeno
-  - kafka:
-    name: 172.16.19.77:9094
-    url: kafka:9092
-    input_topic: openconfig
+  kafka:
+    jalapeno-kafka-openconfig:
+      broker: 172.16.19.77:9094
+      topic: openconfig
+  influx:
+    jalapeno-influx:
+      url: http://172.16.19.76:8086
+      db: mdt_db
+      username: jalapeno
+      password: jalapeno
 
 outputs:
-  - arango:
-    name: jalapeno-arango
-    url: https://arango-hawkv6.dev.network.garden/
-    database: jalapeno
-    username: root
-    password: jalapeno
+  arango:
+    jalapeno-arango:
+      url: https://arango-hawkv6.dev.network.garden/
+      database: jalapeno
+      username: root
+      password: jalapeno
+  kafka:
+    jalapeno-kafka-lslink-events:
+      broker: 172.16.19.77:9094
+      topic: jalapeno.ls_node_edge_events
+
 
 processors:
-  - ArangoDocumentCreater:
-    input: jalapeno-kafka
-    output: jalapeno-arango
-    ouput_document: mdt.openconfig  
-  - ArangoDocumentEnricher:
-    interval: 30 # seconds
-    input: jalapeno-influx
-    output: jalapeno-arango
-    modes:
-      - methods: minimum
-        input:
-          measurement: performance-measurement
-          filter_by: mdt.openconfig.name
-          field: delay_measurement_session/last_advertisement_information/advertised_values/average
-          group_by:
-            - interval
-            - mdt.openconfig.interface_name
-            - mdt.openconfig.name
-        output:
-          document: ls_link
-          filter_by:
-            - mdt.openconfig.name
-            - mdt.openconfig.ipv6_address
-          field: unidir_link_delay
+    TelemetryToArango:
+      LsLink:
+        inputs:
+          - jalapeno-kafka-openconfig
+          - jalapeno-influx
+        outputs: 
+          - jalapeno-arango
+          - jalapeno-kafka-lslink-events
+        interval: 30 # seconds
+        modes:
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                filter_by: openconfig.source
+                field: delay_measurement_session/last_advertisement_information/advertised_values/average
+                method: mean
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_link_delay
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                filter_by: openconfig.source
+                field: delay_measurement_session/last_advertisement_information/advertised_values/minimum
+                method: mean
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_link_delay_min_max[0]
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                filter_by: openconfig.source
+                field: delay_measurement_session/last_advertisement_information/advertised_values/max
+                method: mean
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_link_delay_min_max[1]
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                filter_by: openconfig.source
+                field: delay_measurement_session/last_advertisement_information/advertised_values/variance
+                method: mean
+                max: 
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_delay_variation
+          - input-options:
+              jalapeno-influx:
+                measurement: isis
+                filter_by: openconfig.source
+                field: interface_status_and_data/enabled/packet_loss_percentage 
+                method: max
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_packet_loss
+          - input-options:
+              jalapeno-influx:
+                measurement: isis
+                filter_by: openconfig.source
+                field: interface_status_and_data/enabled/packet_loss_percentage 
+                method: max
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_packet_loss
+          - input-options:
+              jalapeno-influx:
+                measurement: isis
+                filter_by: openconfig.source
+                field: interface_status_and_data/enabled/bandwidth 
+                method: last
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_available_bw
+          - input-options:
+              jalapeno-influx:
+                measurement: utilization
+                filter_by: openconfig.source
+                field: out_octets
+                method: max
+                group_by:
+                  - interval
+                  - openconfig.interface_name
+                  - openconfig.source
+            output-options:
+              jalapeno-arango:
+                document: ls_link
+                filter_by:
+                  - openconfig.source
+                  - openconfig.ipv6_address
+                field: unidir_bw_utilization
