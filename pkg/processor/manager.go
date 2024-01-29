@@ -2,6 +2,7 @@ package processor
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/input"
@@ -12,6 +13,8 @@ import (
 
 type ProcessorManager interface {
 	Init() error
+	StartProcessors()
+	StopProcessors()
 }
 
 type DefaultProcessorManager struct {
@@ -20,6 +23,7 @@ type DefaultProcessorManager struct {
 	inputManager  input.InputManager
 	outputManager output.OutputManager
 	processors    map[string]Processor
+	wg            sync.WaitGroup
 }
 
 func NewDefaultProcessorManager(config config.Config, inputManager input.InputManager, outputManager output.OutputManager) DefaultProcessorManager {
@@ -29,6 +33,7 @@ func NewDefaultProcessorManager(config config.Config, inputManager input.InputMa
 		inputManager:  inputManager,
 		outputManager: outputManager,
 		processors:    make(map[string]Processor),
+		wg:            sync.WaitGroup{},
 	}
 }
 
@@ -86,4 +91,23 @@ func (manager *DefaultProcessorManager) Init() error {
 		}
 	}
 	return nil
+}
+
+func (manager *DefaultProcessorManager) StartProcessors() {
+	manager.log.Infoln("Starting processors")
+	manager.wg.Add(len(manager.processors))
+	for _, processor := range manager.processors {
+		go func(processor Processor) {
+			defer manager.wg.Done()
+			processor.Start()
+		}(processor)
+	}
+}
+
+func (manager *DefaultProcessorManager) StopProcessors() {
+	manager.log.Infoln("Stopping processors")
+	for _, processor := range manager.processors {
+		processor.Stop()
+	}
+	manager.wg.Wait()
 }

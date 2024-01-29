@@ -2,7 +2,7 @@ inputs:
   kafka:
     jalapeno-kafka-openconfig:
       broker: 172.16.19.77:9094
-      topic: openconfig
+      topic: hawkv6.openconfig
   influx:
     jalapeno-influx:
       url: http://172.16.19.76:8086

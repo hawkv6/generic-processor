@@ -14,13 +14,13 @@ import (
 type InfluxInput struct {
 	log         *logrus.Entry
 	inputConfig config.InfluxInputConfig
-	commandChan chan message.CommandMessage
+	commandChan chan message.Command
 	resultChan  chan message.ResultMessage
 	quitChan    chan bool
 	client      client.Client
 }
 
-func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.CommandMessage, resultChan chan message.ResultMessage) *InfluxInput {
+func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Command, resultChan chan message.ResultMessage) *InfluxInput {
 	return &InfluxInput{
 		log:         logging.DefaultLogger.WithField("subsystem", Subsystem),
 		inputConfig: config,
@@ -60,6 +60,7 @@ func (input *InfluxInput) Start() {
 	}
 }
 
-func (input *InfluxInput) Stop() {
+func (input *InfluxInput) Stop() error {
 	input.quitChan <- true
+	return nil
 }

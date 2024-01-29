@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"os/signal"
+
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/input"
 	"github.com/hawkv6/generic-processor/pkg/logging"
@@ -32,5 +35,18 @@ func main() {
 	if err := processorManager.Init(); err != nil {
 		log.Fatalf("error initializing processors: %v", err)
 	}
+
+	if err := inputManager.StartInputs(); err != nil {
+		log.Fatalf("error starting inputs: %v", err)
+	}
+	processorManager.StartProcessors()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	<-signalChan
+	log.Info("Received interrupt signal, shutting down")
+	inputManager.StopInputs()
+	processorManager.StopProcessors()
 
 }
