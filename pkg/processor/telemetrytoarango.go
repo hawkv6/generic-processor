@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"time"
+
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/input"
 	"github.com/hawkv6/generic-processor/pkg/logging"
@@ -58,7 +60,7 @@ func (processor *TelemetryToArangoProcessor) processInterfaceStatusMessage(msg *
 	}
 }
 
-func (processor *TelemetryToArangoProcessor) StartKafka(name string, input *input.KafkaInput, commandChan chan message.Command, resultChan chan message.ResultMessage) {
+func (processor *TelemetryToArangoProcessor) startKafkaProcessing(name string, input *input.KafkaInput, commandChan chan message.Command, resultChan chan message.ResultMessage) {
 	commandChan <- message.StartListeningCommand{}
 	processor.log.Debugf("Starting Processing '%s' input messages", name)
 	for {
@@ -78,12 +80,63 @@ func (processor *TelemetryToArangoProcessor) StartKafka(name string, input *inpu
 	}
 }
 
+func (processor *TelemetryToArangoProcessor) sendCommands(name string, commandChan chan message.Command) {
+	for _, mode := range processor.config.Modes {
+		for inputName, inputOption := range mode.InputOptions {
+			if inputName == name {
+				commandChan <- message.InfluxCommand{
+					Measurement: inputOption.Measurement,
+					Field:       inputOption.Field,
+					Method:      inputOption.Method,
+					GroupBy:     inputOption.GroupBy,
+					Interval:    processor.config.Interval,
+				}
+			}
+		}
+	}
+}
+
+func (processor *TelemetryToArangoProcessor) startSchedulingInfluxCommands(name string, input *input.InfluxInput, commandChan chan message.Command) {
+	processor.log.Infof("Starting scheduling Influx commands for '%s' input every %d seconds", name, processor.config.Interval)
+	ticker := time.NewTicker(time.Duration(processor.config.Interval) * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		processor.sendCommands(name, commandChan)
+	}
+}
+
+func (processor *TelemetryToArangoProcessor) processResultMessage(name string, msg message.ResultMessage) {
+	processor.log.Debugf("Received message from '%s' input: %v", name, msg)
+	switch msgType := msg.(type) {
+	case *message.InfluxResultMessage:
+		processor.log.Debugf("Received InfluxResultMessage: %v", msgType)
+		// here the ls link is created in the database
+	}
+}
+
+func (processor *TelemetryToArangoProcessor) startInfluxProcessing(name string, input *input.InfluxInput, commandChan chan message.Command, resultChan chan message.ResultMessage) {
+	processor.log.Debugf("Starting Processing '%s' input messages", name)
+	go processor.startSchedulingInfluxCommands(name, input, commandChan)
+
+	for {
+		select {
+		case msg := <-resultChan:
+			processor.processResultMessage(name, msg)
+		case <-processor.quitChan:
+			processor.log.Infof("Stopping Processing '%s' input messages", name)
+			return
+		}
+	}
+}
+
 func (processor *TelemetryToArangoProcessor) Start() {
 	processor.log.Infof("Starting TelemetryToArangoProcessor '%s'", processor.name)
 	for name, inputResource := range processor.inputResources {
 		switch input := inputResource.Input.(type) {
 		case *input.KafkaInput:
-			processor.StartKafka(name, input, inputResource.CommandChannel, inputResource.ResultChannel)
+			go processor.startKafkaProcessing(name, input, inputResource.CommandChannel, inputResource.ResultChannel)
+		case *input.InfluxInput:
+			go processor.startInfluxProcessing(name, input, inputResource.CommandChannel, inputResource.ResultChannel)
 		}
 	}
 }

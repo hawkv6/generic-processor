@@ -26,7 +26,6 @@ type Mode struct {
 type InputOption struct {
 	Name        string   `koanf:"name" validate:"required"`
 	Measurement string   `koanf:"measurement" validate:"required"`
-	FilterBy    string   `koanf:"filter_by" validate:"required"`
 	Field       string   `koanf:"field" validate:"required"`
 	Method      string   `koanf:"method" validate:"required"`
 	GroupBy     []string `koanf:"group_by" validate:"required"`

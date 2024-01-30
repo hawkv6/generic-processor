@@ -37,13 +37,11 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: performance-measurement
-                filter_by: openconfig.source
                 field: delay_measurement_session/last_advertisement_information/advertised_values/average
                 method: mean
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source 
             output-options:
               jalapeno-arango:
                 document: ls_link
@@ -54,13 +52,11 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: performance-measurement
-                filter_by: openconfig.source
                 field: delay_measurement_session/last_advertisement_information/advertised_values/minimum
                 method: mean
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
@@ -71,13 +67,11 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: performance-measurement
-                filter_by: openconfig.source
                 field: delay_measurement_session/last_advertisement_information/advertised_values/max
                 method: mean
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
@@ -88,14 +82,12 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: performance-measurement
-                filter_by: openconfig.source
                 field: delay_measurement_session/last_advertisement_information/advertised_values/variance
                 method: mean
                 max: 
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
@@ -106,13 +98,11 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: isis
-                filter_by: openconfig.source
                 field: interface_status_and_data/enabled/packet_loss_percentage 
                 method: max
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
@@ -123,13 +113,11 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: isis
-                filter_by: openconfig.source
                 field: interface_status_and_data/enabled/packet_loss_percentage 
                 method: max
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
@@ -140,30 +128,26 @@ processors:
           - input-options:
               jalapeno-influx:
                 measurement: isis
-                filter_by: openconfig.source
                 field: interface_status_and_data/enabled/bandwidth 
                 method: last
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
                 filter_by:
-                  - openconfig.source
-                  - openconfig.ipv6_address
+                  - source
+                  - ipv6_address
                 field: unidir_available_bw
           - input-options:
               jalapeno-influx:
                 measurement: utilization
-                filter_by: openconfig.source
                 field: out_octets
                 method: max
                 group_by:
-                  - interval
-                  - openconfig.interface_name
-                  - openconfig.source
+                  - interface_name
+                  - source
             output-options:
               jalapeno-arango:
                 document: ls_link
