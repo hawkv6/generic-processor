@@ -17,6 +17,7 @@ type TelemetryToArangoProcessor struct {
 	outputResources     map[string]output.OutputResource
 	ipv6Addresses       map[string]string
 	activeIpv6Addresses map[string]string
+	quitChan            chan struct{}
 }
 
 func NewTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfig, inputResources map[string]input.InputResource, outputResources map[string]output.OutputResource) *TelemetryToArangoProcessor {
@@ -28,6 +29,7 @@ func NewTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfi
 		outputResources:     outputResources,
 		ipv6Addresses:       make(map[string]string),
 		activeIpv6Addresses: make(map[string]string),
+		quitChan:            make(chan struct{}),
 	}
 }
 
@@ -56,17 +58,22 @@ func (processor *TelemetryToArangoProcessor) processInterfaceStatusMessage(msg *
 	}
 }
 
-func (processor *TelemetryToArangoProcessor) StartKafka(name string, input input.KafkaInput, commandChan chan message.Command, resultChan chan message.ResultMessage) {
+func (processor *TelemetryToArangoProcessor) StartKafka(name string, input *input.KafkaInput, commandChan chan message.Command, resultChan chan message.ResultMessage) {
 	commandChan <- message.StartListeningCommand{}
 	processor.log.Debugf("Starting Processing '%s' input messages", name)
 	for {
-		msg := <-resultChan
-		processor.log.Debugf("Received message from '%s' input: %v", name, msg)
-		switch msgType := msg.(type) {
-		case *message.IPv6Message:
-			processor.processIpv6Message(msgType)
-		case *message.InterfaceStatusMessage:
-			processor.processInterfaceStatusMessage(msgType)
+		select {
+		case msg := <-resultChan:
+			processor.log.Debugf("Received message from '%s' input: %v", name, msg)
+			switch msgType := msg.(type) {
+			case *message.IPv6Message:
+				processor.processIpv6Message(msgType)
+			case *message.InterfaceStatusMessage:
+				processor.processInterfaceStatusMessage(msgType)
+			}
+		case <-processor.quitChan:
+			processor.log.Infof("Stopping Processing '%s' input messages", name)
+			return
 		}
 	}
 }
@@ -76,11 +83,12 @@ func (processor *TelemetryToArangoProcessor) Start() {
 	for name, inputResource := range processor.inputResources {
 		switch input := inputResource.Input.(type) {
 		case *input.KafkaInput:
-			processor.StartKafka(name, *input, inputResource.CommandChannel, inputResource.ResultChannel)
+			processor.StartKafka(name, input, inputResource.CommandChannel, inputResource.ResultChannel)
 		}
 	}
 }
 
 func (processor *TelemetryToArangoProcessor) Stop() {
+	close(processor.quitChan)
 	processor.log.Infof("Stopping TelemetryToArangoProcessor '%s'", processor.name)
 }

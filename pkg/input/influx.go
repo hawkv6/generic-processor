@@ -16,7 +16,7 @@ type InfluxInput struct {
 	inputConfig config.InfluxInputConfig
 	commandChan chan message.Command
 	resultChan  chan message.ResultMessage
-	quitChan    chan bool
+	quitChan    chan struct{}
 	client      client.Client
 }
 
@@ -26,7 +26,7 @@ func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Co
 		inputConfig: config,
 		commandChan: commandChan,
 		resultChan:  resultChan,
-		quitChan:    make(chan bool),
+		quitChan:    make(chan struct{}),
 	}
 }
 
@@ -54,13 +54,15 @@ func (input *InfluxInput) Start() {
 	for {
 		select {
 		case <-input.quitChan:
+			input.log.Infof("Stopping InfluxDB input '%s'", input.inputConfig.Name)
 			return
 		case <-input.commandChan:
+			input.log.Debugln("Received command")
 		}
 	}
 }
 
 func (input *InfluxInput) Stop() error {
-	input.quitChan <- true
+	close(input.quitChan)
 	return nil
 }

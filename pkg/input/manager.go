@@ -2,6 +2,7 @@ package input
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/logging"
@@ -18,6 +19,7 @@ type DefaultInputManager struct {
 	log            *logrus.Entry
 	config         config.Config
 	inputResources map[string]InputResource
+	wg             sync.WaitGroup
 }
 
 func NewDefaultInputManager(config config.Config) *DefaultInputManager {
@@ -25,6 +27,7 @@ func NewDefaultInputManager(config config.Config) *DefaultInputManager {
 		log:            logging.DefaultLogger.WithField("subsystem", Subsystem),
 		config:         config,
 		inputResources: make(map[string]InputResource),
+		wg:             sync.WaitGroup{},
 	}
 }
 
@@ -79,14 +82,24 @@ func (manager *DefaultInputManager) GetInputResources(name string) (error, *Inpu
 }
 
 func (manager *DefaultInputManager) StartInputs() error {
+	manager.log.Infoln("Starting all inputs")
+	manager.wg.Add(len(manager.inputResources))
 	for _, input := range manager.inputResources {
-		go input.Input.Start()
+		go func(input InputResource) {
+			defer manager.wg.Done()
+			input.Input.Start()
+		}(input)
 	}
 	return nil
 }
 
 func (manager *DefaultInputManager) StopInputs() {
+	manager.log.Infoln("Stopping all inputs")
 	for _, input := range manager.inputResources {
-		input.Input.Stop()
+		if err := input.Input.Stop(); err != nil {
+			manager.log.Errorln("Error stopping input: ", err)
+		}
 	}
+	manager.wg.Wait()
+	manager.log.Infoln("All inputs stopped")
 }

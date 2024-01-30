@@ -2,6 +2,7 @@ package input
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -17,11 +18,12 @@ type KafkaInput struct {
 	inputConfig             config.KafkaInputConfig
 	commandChan             chan message.Command
 	resultChan              chan message.ResultMessage
-	quitChan                chan bool
+	quitChan                chan struct{}
 	saramaConfig            *sarama.Config
 	saramaConsumer          sarama.Consumer
 	saramaPartitionConsumer sarama.PartitionConsumer
 	handlers                map[string]func(*message.TelemetryMessage) (message.ResultMessage, error)
+	wg                      sync.WaitGroup
 }
 
 func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Command, resultChan chan message.ResultMessage) *KafkaInput {
@@ -30,7 +32,8 @@ func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Comm
 		inputConfig: config,
 		commandChan: commandChan,
 		resultChan:  resultChan,
-		quitChan:    make(chan bool),
+		quitChan:    make(chan struct{}),
+		wg:          sync.WaitGroup{},
 	}
 	input.handlers = map[string]func(*message.TelemetryMessage) (message.ResultMessage, error){
 		"ipv6-addresses": func(msg *message.TelemetryMessage) (message.ResultMessage, error) {
@@ -138,28 +141,27 @@ func (input *KafkaInput) processMessage(msg *sarama.ConsumerMessage) {
 
 func (input *KafkaInput) StartListening() {
 	for {
-		msg := <-input.saramaPartitionConsumer.Messages()
-		input.processMessage(msg)
-	}
-}
-
-func (input *KafkaInput) Start() {
-	for {
 		select {
-		case cmd := <-input.commandChan:
-			if _, ok := cmd.(message.StartListeningCommand); ok {
-				input.StartListening()
-			} else {
-				input.log.Debugln("Received command: ", cmd)
-			}
+		case msg := <-input.saramaPartitionConsumer.Messages():
+			input.processMessage(msg)
 		case <-input.quitChan:
-			input.log.Debugln("Stopping Kafka input")
+			input.log.Infof("Stopping Kafka input '%s'", input.inputConfig.Name)
+			return
 		}
 	}
 }
 
+func (input *KafkaInput) Start() {
+	cmd := <-input.commandChan
+	if _, ok := cmd.(message.StartListeningCommand); ok {
+		input.StartListening()
+	} else {
+		input.log.Debugln("Received command: ", cmd)
+	}
+}
+
 func (input *KafkaInput) Stop() error {
-	input.quitChan <- true
+	close(input.quitChan)
 	if err := input.saramaPartitionConsumer.Close(); err != nil {
 		input.log.Errorln("Error closing partition consumer: ", err)
 		return err

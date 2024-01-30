@@ -94,7 +94,7 @@ func (manager *DefaultProcessorManager) Init() error {
 }
 
 func (manager *DefaultProcessorManager) StartProcessors() {
-	manager.log.Infoln("Starting processors")
+	manager.log.Infoln("Starting all processors")
 	manager.wg.Add(len(manager.processors))
 	for _, processor := range manager.processors {
 		go func(processor Processor) {
@@ -110,4 +110,5 @@ func (manager *DefaultProcessorManager) StopProcessors() {
 		processor.Stop()
 	}
 	manager.wg.Wait()
+	manager.log.Infoln("All processors stopped")
 }
