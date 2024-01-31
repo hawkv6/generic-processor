@@ -2,6 +2,7 @@ package output
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/logging"
@@ -11,12 +12,15 @@ import (
 type OutputManager interface {
 	InitOutputs() error
 	GetOutputResource(string) (error, *OutputResource)
+	StartOutputs() error
+	StopOutputs()
 }
 
 type DefaultOutputManager struct {
 	log             *logrus.Entry
 	config          config.Config
 	outputResources map[string]OutputResource
+	wg              sync.WaitGroup
 }
 
 func NewDefaultOutputManager(config config.Config) *DefaultOutputManager {
@@ -24,12 +28,13 @@ func NewDefaultOutputManager(config config.Config) *DefaultOutputManager {
 		log:             logging.DefaultLogger.WithField("subsystem", Subsystem),
 		config:          config,
 		outputResources: make(map[string]OutputResource),
+		wg:              sync.WaitGroup{},
 	}
 }
 
 func (manager *DefaultOutputManager) initArangoOutput(name string, configType config.ArangoOutputConfig) error {
 	outputResource := NewOutputResource()
-	output := NewArangoOutput(configType)
+	output := NewArangoOutput(configType, outputResource.CommandChan, outputResource.ResultChan)
 	if err := output.Init(); err != nil {
 		return err
 	}
@@ -76,4 +81,27 @@ func (manager *DefaultOutputManager) GetOutputResource(name string) (error, *Out
 		return fmt.Errorf("output resource '%s' not found", name), nil
 	}
 	return nil, &output
+}
+
+func (manager *DefaultOutputManager) StartOutputs() error {
+	manager.log.Infoln("Starting all outputs")
+	manager.wg.Add(len(manager.outputResources))
+	for _, output := range manager.outputResources {
+		go func(output OutputResource) {
+			defer manager.wg.Done()
+			output.Output.Start()
+		}(output)
+	}
+	return nil
+}
+
+func (manager *DefaultOutputManager) StopOutputs() {
+	manager.log.Infoln("Stopping all outputs")
+	for _, output := range manager.outputResources {
+		if err := output.Output.Stop(); err != nil {
+			manager.log.Errorln("Error stopping output: ", err)
+		}
+	}
+	manager.wg.Wait()
+	manager.log.Infoln("All output stopped")
 }

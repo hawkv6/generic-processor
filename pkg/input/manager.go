@@ -33,7 +33,7 @@ func NewDefaultInputManager(config config.Config) *DefaultInputManager {
 
 func (manager *DefaultInputManager) initInfluxInput(name string, configType config.InfluxInputConfig) error {
 	inputResource := NewInputResource()
-	input := NewInfluxInput(configType, inputResource.CommandChannel, inputResource.ResultChannel)
+	input := NewInfluxInput(configType, inputResource.CommandChan, inputResource.ResultChan)
 	if err := input.Init(); err != nil {
 		return fmt.Errorf("error creating InfluxDB client: %v", err)
 	}
@@ -45,7 +45,7 @@ func (manager *DefaultInputManager) initInfluxInput(name string, configType conf
 
 func (manager *DefaultInputManager) initKafkaInput(name string, configType config.KafkaInputConfig) error {
 	inputResource := NewInputResource()
-	input := NewKafkaInput(configType, inputResource.CommandChannel, inputResource.ResultChannel)
+	input := NewKafkaInput(configType, inputResource.CommandChan, inputResource.ResultChan)
 	if err := input.Init(); err != nil {
 		return fmt.Errorf("error creating Kafka consumer: %v", err)
 	}

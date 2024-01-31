@@ -17,16 +17,16 @@ type KafkaInput struct {
 	log                     *logrus.Entry
 	inputConfig             config.KafkaInputConfig
 	commandChan             chan message.Command
-	resultChan              chan message.ResultMessage
+	resultChan              chan message.Result
 	quitChan                chan struct{}
 	saramaConfig            *sarama.Config
 	saramaConsumer          sarama.Consumer
 	saramaPartitionConsumer sarama.PartitionConsumer
-	handlers                map[string]func(*message.TelemetryMessage) (message.ResultMessage, error)
+	handlers                map[string]func(*message.TelemetryMessage) (message.Result, error)
 	wg                      sync.WaitGroup
 }
 
-func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Command, resultChan chan message.ResultMessage) *KafkaInput {
+func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Command, resultChan chan message.Result) *KafkaInput {
 	input := &KafkaInput{
 		log:         logging.DefaultLogger.WithField("subsystem", Subsystem),
 		inputConfig: config,
@@ -35,11 +35,11 @@ func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Comm
 		quitChan:    make(chan struct{}),
 		wg:          sync.WaitGroup{},
 	}
-	input.handlers = map[string]func(*message.TelemetryMessage) (message.ResultMessage, error){
-		"ipv6-addresses": func(msg *message.TelemetryMessage) (message.ResultMessage, error) {
+	input.handlers = map[string]func(*message.TelemetryMessage) (message.Result, error){
+		"ipv6-addresses": func(msg *message.TelemetryMessage) (message.Result, error) {
 			return input.decodeIpv6Message(msg)
 		},
-		"oper-state": func(msg *message.TelemetryMessage) (message.ResultMessage, error) {
+		"oper-state": func(msg *message.TelemetryMessage) (message.Result, error) {
 			return input.decodeInterfaceStatusMessage(msg)
 		},
 	}
@@ -62,7 +62,7 @@ func (input *KafkaInput) createConsumer() error {
 	return nil
 }
 func (input *KafkaInput) createParitionConsumer() error {
-	partitionConsumer, err := input.saramaConsumer.ConsumePartition(input.inputConfig.Topic, 0, sarama.OffsetNewest)
+	partitionConsumer, err := input.saramaConsumer.ConsumePartition(input.inputConfig.Topic, 0, sarama.OffsetOldest)
 	if err != nil {
 		input.log.Debugln("Error partition consumer: ", err)
 		return err
@@ -153,7 +153,7 @@ func (input *KafkaInput) StartListening() {
 
 func (input *KafkaInput) Start() {
 	cmd := <-input.commandChan
-	if _, ok := cmd.(message.StartListeningCommand); ok {
+	if _, ok := cmd.(message.KafkaListeningCommand); ok {
 		input.StartListening()
 	} else {
 		input.log.Debugln("Received command: ", cmd)

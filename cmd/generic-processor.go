@@ -39,6 +39,11 @@ func main() {
 	if err := inputManager.StartInputs(); err != nil {
 		log.Fatalf("error starting inputs: %v", err)
 	}
+
+	if err := outputManager.StartOutputs(); err != nil {
+		log.Fatalf("error starting outputs: %v", err)
+	}
+
 	processorManager.StartProcessors()
 
 	signalChan := make(chan os.Signal, 1)

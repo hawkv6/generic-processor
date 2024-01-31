@@ -32,8 +32,10 @@ type InputOption struct {
 }
 
 type OutputOption struct {
-	Name     string   `koanf:"name" validate:"required"`
-	Document string   `koanf:"document" validate:"required"`
-	FilterBy []string `koanf:"filter_by" validate:"required"`
-	Field    string   `koanf:"field" validate:"required"`
+	Name       string   `koanf:"name" validate:"required"`
+	Method     string   `koanf:"method" validate:"required"`
+	Collection string   `koanf:"collection" validate:"required"`
+	FilterBy   []string `koanf:"filter_by" validate:"required"`
+	Field      string   `koanf:"field" validate:"required"`
+	Index      *uint    `koanf:"index"`
 }

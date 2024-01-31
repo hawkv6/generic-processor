@@ -5,5 +5,5 @@ const Subsystem = "output"
 type Output interface {
 	Init() error
 	Start()
-	Stop()
+	Stop() error
 }

@@ -15,12 +15,12 @@ type InfluxInput struct {
 	log         *logrus.Entry
 	inputConfig config.InfluxInputConfig
 	commandChan chan message.Command
-	resultChan  chan message.ResultMessage
+	resultChan  chan message.Result
 	quitChan    chan struct{}
 	client      client.Client
 }
 
-func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Command, resultChan chan message.ResultMessage) *InfluxInput {
+func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Command, resultChan chan message.Result) *InfluxInput {
 	return &InfluxInput{
 		log:         logging.DefaultLogger.WithField("subsystem", Subsystem),
 		inputConfig: config,
@@ -67,7 +67,7 @@ func (input *InfluxInput) queryDB(query string) (res []client.Result, err error)
 	return res, nil
 }
 
-func (input *InfluxInput) createQuery(command message.InfluxCommand) string {
+func (input *InfluxInput) createQuery(command message.InfluxQueryCommand) string {
 	query := fmt.Sprintf(`SELECT %s("%s") FROM "%s" WHERE time > now() - %ds AND time <= now() GROUP BY`, command.Method, command.Field, command.Measurement, command.Interval)
 
 	for i, name := range command.GroupBy {
@@ -79,14 +79,14 @@ func (input *InfluxInput) createQuery(command message.InfluxCommand) string {
 	return query
 }
 
-func (input *InfluxInput) sendResults(results []client.Result, command message.InfluxCommand) {
+func (input *InfluxInput) sendResults(results []client.Result, command message.InfluxQueryCommand) {
 	input.log.Debugln("Sending InfluxDB results")
 	for _, row := range results[0].Series {
 		for rowIdx, rowName := range row.Columns {
 			if rowName != "time" {
 				for _, value := range row.Values {
 					input.resultChan <- message.InfluxResultMessage{
-						InfluxCommand: command,
+						OutputOptions: command.OutputOptions,
 						Tags:          row.Tags,
 						Value:         value[rowIdx],
 					}
@@ -96,7 +96,7 @@ func (input *InfluxInput) sendResults(results []client.Result, command message.I
 	}
 }
 
-func (input *InfluxInput) executeCommand(command message.InfluxCommand) {
+func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
 	input.log.Debugf("Executing InfluxDB command: %v", command)
 	query := input.createQuery(command)
 	result, err := input.queryDB(query)
@@ -111,7 +111,7 @@ func (input *InfluxInput) Start() {
 	for {
 		select {
 		case msg := <-input.commandChan:
-			if influxCommand, ok := msg.(message.InfluxCommand); ok {
+			if influxCommand, ok := msg.(message.InfluxQueryCommand); ok {
 				input.log.Debugf("Received InfluxCommand message: %v", influxCommand)
 				input.executeCommand(influxCommand)
 			} else {

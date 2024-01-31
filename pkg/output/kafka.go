@@ -41,4 +41,4 @@ func (output *KafkaOutput) Init() error {
 
 func (output *KafkaOutput) Start() {}
 
-func (output *KafkaOutput) Stop() {}
+func (output *KafkaOutput) Stop() error { return nil }
