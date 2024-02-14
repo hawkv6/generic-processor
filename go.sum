@@ -156,6 +156,8 @@ github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d/go.mod h1:+NfK9FKe
 github.com/hjson/hjson-go/v4 v4.0.0/go.mod h1:KaYt3bTw3zhBjYqnXkYywcYctk0A2nxeEFTse3rH13E=
 github.com/influxdata/influxdb v1.11.4 h1:H3pVW+/tWQ4lkHhZxVQ13Ov1hmhHYaAzz8L5aq3ZNtw=
 github.com/influxdata/influxdb v1.11.4/go.mod h1:VO6X2zlamfmEf+Esc9dR+7UQhdE/krspWNEZPwxCrp0=
+github.com/jalapeno-api-gateway/jagw v1.3.4 h1:MmeaVACf235KC8GzczB0lN6udXwBZWwrpPyYS+IlOmM=
+github.com/jalapeno-api-gateway/jagw v1.3.4/go.mod h1:HHNxFB7qOmPlDUsvJloV0/J4EDASoKE0kmbBqxgYJnI=
 github.com/jcmturner/aescts/v2 v2.0.0 h1:9YKLH6ey7H4eDBXW8khjYslgyqG2xZikXP0EQFKrle8=
 github.com/jcmturner/aescts/v2 v2.0.0/go.mod h1:AiaICIRyfYg35RUkr8yESTqvSy7csK90qZ5xfvvsoNs=
 github.com/jcmturner/dnsutils/v2 v2.0.0 h1:lltnkeZGL0wILNvrNiVCR6Ro5PGU/SeBvVO/8c/iPbo=

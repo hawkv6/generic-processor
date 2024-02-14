@@ -57,11 +57,17 @@ func (processor *TelemetryToArangoProcessor) processInterfaceStatusMessage(msg *
 	processor.log.Debugf("Processing InterfaceStatus message: %v", msg)
 	if strings.Contains(msg.Tags.InterfaceName, "Ethernet") {
 		if msg.Fields.AdminStatus == "UP" {
-			processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
-			delete(processor.deactivatedIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
+			processor.log.Infof("Interface '%s' from router '%s' changed to UP", msg.Tags.InterfaceName, msg.Tags.Source)
+			if _, ok := processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
+				processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
+				delete(processor.deactivatedIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
+			}
 		} else {
-			processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
-			delete(processor.activeIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
+			processor.log.Infof("Interface '%s' from router '%s' changed to DOWN", msg.Tags.InterfaceName, msg.Tags.Source)
+			if _, ok := processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
+				processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
+				delete(processor.activeIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
+			}
 		}
 	}
 }
@@ -86,7 +92,7 @@ func (processor *TelemetryToArangoProcessor) startKafkaProcessing(name string, i
 	}
 }
 
-func (processor *TelemetryToArangoProcessor) sendCommands(name string, commandChan chan message.Command) {
+func (processor *TelemetryToArangoProcessor) sendInfluxCommands(name string, commandChan chan message.Command) {
 	for _, mode := range processor.config.Modes {
 		for inputName, inputOption := range mode.InputOptions {
 			if inputName == name {
@@ -108,7 +114,8 @@ func (processor *TelemetryToArangoProcessor) startSchedulingInfluxCommands(name 
 	ticker := time.NewTicker(time.Duration(processor.config.Interval) * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		processor.sendCommands(name, commandChan)
+		processor.log.Infoln("Sending Influx commands")
+		processor.sendInfluxCommands(name, commandChan)
 	}
 }
 
@@ -134,27 +141,40 @@ func (processor *TelemetryToArangoProcessor) getLocalLinkIp(tags map[string]stri
 	return ipv6Address, nil
 }
 
-func (processor *TelemetryToArangoProcessor) sendUpdateCommands(outputOption config.OutputOption, tags map[string]string, commandChan chan message.Command, value interface{}) {
-	filterBy := make(map[string]interface{})
-	for index := range outputOption.FilterBy {
-		if filterKey := outputOption.FilterBy[index]; filterKey == "local_link_ip" {
-			localLinkIp, err := processor.getLocalLinkIp(tags)
-			if err != nil {
-				processor.log.Errorln(err)
-				return
-			}
-			filterBy[filterKey] = localLinkIp
-		} else {
-			processor.log.Errorf("Received not supported filter_by value: %v", filterKey)
-		}
-		commandChan <- message.ArangoUpdateCommand{
-			Collection: outputOption.Collection,
-			FilterBy:   filterBy,
-			Field:      outputOption.Field,
-			Value:      value,
-			Index:      outputOption.Index,
-		}
+func (processor *TelemetryToArangoProcessor) sendArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, commandChan chan message.Command) {
+	updateCommand := message.ArangoUpdateCommand{
+		Collection: outputOption.Collection,
+		Updates:    make(map[string]message.ArangoUpdate),
 	}
+	for _, result := range results {
+		update := message.ArangoUpdate{
+			Field: outputOption.Field,
+			Value: result.Value,
+			Index: outputOption.Index,
+		}
+		filterBy := make(map[string]interface{})
+		var key string
+		for index := range outputOption.FilterBy {
+			if filterKey := outputOption.FilterBy[index]; filterKey == "local_link_ip" {
+				localLinkIp, err := processor.getLocalLinkIp(result.Tags)
+				if err != nil {
+					processor.log.Errorln(err)
+					return
+				}
+				filterBy[filterKey] = localLinkIp
+				key = localLinkIp
+			} else {
+				processor.log.Errorf("Received not supported filter_by value: %v", filterKey)
+			}
+		}
+		update.FilterBy = filterBy
+		if key == "" {
+			processor.log.Errorf("Received empty key for filter_by: %v", outputOption.FilterBy)
+			return
+		}
+		updateCommand.Updates[key] = update
+	}
+	commandChan <- updateCommand
 }
 
 func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name string, msg message.Result) {
@@ -168,7 +188,7 @@ func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name str
 				continue
 			}
 			if outputOption.Method == "update" {
-				processor.sendUpdateCommands(outputOption, msgType.Tags, outputResource.CommandChan, msgType.Value)
+				processor.sendArangoUpdateCommands(outputOption, msgType.Results, outputResource.CommandChan)
 			} else {
 				processor.log.Errorf("Received unknown output method: %v", msgType.OutputOptions[outputName].Method)
 			}

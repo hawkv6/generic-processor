@@ -22,8 +22,12 @@ type InfluxQueryCommand struct {
 type ArangoUpdateCommand struct {
 	BaseCommand
 	Collection string
-	FilterBy   map[string]interface{}
-	Field      string
-	Value      interface{}
-	Index      *uint
+	Updates    map[string]ArangoUpdate
+}
+
+type ArangoUpdate struct {
+	FilterBy map[string]interface{}
+	Field    string
+	Value    interface{}
+	Index    *uint
 }

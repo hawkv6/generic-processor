@@ -81,19 +81,29 @@ func (input *InfluxInput) createQuery(command message.InfluxQueryCommand) string
 
 func (input *InfluxInput) sendResults(results []client.Result, command message.InfluxQueryCommand) {
 	input.log.Debugln("Sending InfluxDB results")
+	resultMessage := message.InfluxResultMessage{
+		OutputOptions: command.OutputOptions,
+	}
+	if len(results) == 0 {
+		input.log.Errorf("No results returned from InfluxDB query")
+		return
+	}
 	for _, row := range results[0].Series {
-		for rowIdx, rowName := range row.Columns {
-			if rowName != "time" {
-				for _, value := range row.Values {
-					input.resultChan <- message.InfluxResultMessage{
-						OutputOptions: command.OutputOptions,
-						Tags:          row.Tags,
-						Value:         value[rowIdx],
-					}
+		for columnIndex, columnName := range row.Columns {
+			if columnName == command.Method {
+				if len(row.Values) == 0 {
+					input.log.Errorf("No values returned from InfluxDB query")
+					return
 				}
+				result := message.InfluxResult{
+					Tags:  row.Tags,
+					Value: row.Values[0][columnIndex],
+				}
+				resultMessage.Results = append(resultMessage.Results, result)
 			}
 		}
 	}
+	input.resultChan <- resultMessage
 }
 
 func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
@@ -102,6 +112,14 @@ func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
 	result, err := input.queryDB(query)
 	if err != nil {
 		input.log.Errorf("Error executing InfluxDB query: %v", err)
+		return
+	}
+	if len(result) == 0 {
+		input.log.Errorf("No results returned from InfluxDB query")
+		return
+	}
+	if len(result[0].Series) == 0 {
+		input.log.Errorf("No series returned from InfluxDB query")
 		return
 	}
 	input.sendResults(result, command)
