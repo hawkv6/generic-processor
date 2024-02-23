@@ -1,2 +1,2 @@
 # generic-processor
-Takes a generic input and puts it into ArangoDB
+The generic processor takes data from specified inputs, processes it, and sends it to specified outputs.

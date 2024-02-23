@@ -11,7 +11,7 @@ import (
 
 type OutputManager interface {
 	InitOutputs() error
-	GetOutputResource(string) (error, *OutputResource)
+	GetOutputResource(string) (*OutputResource, error)
 	StartOutputs() error
 	StopOutputs()
 }
@@ -75,12 +75,12 @@ func (manager *DefaultOutputManager) InitOutputs() error {
 	return nil
 }
 
-func (manager *DefaultOutputManager) GetOutputResource(name string) (error, *OutputResource) {
+func (manager *DefaultOutputManager) GetOutputResource(name string) (*OutputResource, error) {
 	output, ok := manager.outputResources[name]
 	if !ok {
-		return fmt.Errorf("output resource '%s' not found", name), nil
+		return nil, fmt.Errorf("output resource '%s' not found", name)
 	}
-	return nil, &output
+	return &output, nil
 }
 
 func (manager *DefaultOutputManager) StartOutputs() error {

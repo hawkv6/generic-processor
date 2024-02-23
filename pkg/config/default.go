@@ -1,9 +1,7 @@
 package config
 
 import (
-	"flag"
 	"fmt"
-	"os"
 
 	"github.com/hawkv6/generic-processor/pkg/logging"
 	"github.com/knadh/koanf"
@@ -24,37 +22,21 @@ type DefaultConfig struct {
 	processors     map[string]ProcessorConfig
 }
 
-func NewDefaultConfig() *DefaultConfig {
+func NewDefaultConfig(config string) *DefaultConfig {
 	return &DefaultConfig{
-		log:           logging.DefaultLogger.WithField("subsystem", Subsystem),
-		koanfInstance: koanf.New("."),
-		validate:      validator.New(validator.WithRequiredStructEnabled()),
-		inputs:        make(map[string]InputConfig),
-		outputs:       make(map[string]OutputConfig),
-		processors:    make(map[string]ProcessorConfig),
+		log:            logging.DefaultLogger.WithField("subsystem", Subsystem),
+		koanfInstance:  koanf.New("."),
+		validate:       validator.New(validator.WithRequiredStructEnabled()),
+		inputs:         make(map[string]InputConfig),
+		outputs:        make(map[string]OutputConfig),
+		processors:     make(map[string]ProcessorConfig),
+		configLocation: config,
 	}
-}
-
-func (config *DefaultConfig) init() error {
-	configLocation, set := os.LookupEnv("HAWKV6_GENERIC_PROCESSOR_CONFIG")
-	if set {
-		config.configLocation = configLocation
-	} else {
-		flag.Parse()
-		if configFlag != "" {
-			config.configLocation = configFlag
-		} else if shortConfigFlag != "" {
-			config.configLocation = shortConfigFlag
-		} else {
-			return fmt.Errorf("config path not set; use -c or --config flag or set HAWKV6_GENERIC_PROCESSOR_CONFIG environment variable")
-		}
-	}
-	return nil
 }
 
 func (config *DefaultConfig) Read() error {
-	if err := config.init(); err != nil {
-		return err
+	if config.configLocation == "" {
+		return fmt.Errorf("config path not set; use -c or --config flag or set HAWKV6_GENERIC_PROCESSOR_CONFIG environment variable")
 	}
 	if err := config.koanfInstance.Load(file.Provider(config.configLocation), yaml.Parser()); err != nil {
 		return err
@@ -68,6 +50,7 @@ func (config *DefaultConfig) validateInfluxInputs() error {
 		return err
 	}
 	for name, influxInput := range influxInputs {
+		config.log.Infof("Validating influx input '%s'", name)
 		influxInput.Name = name
 		if influxInput.Timeout == 0 {
 			influxInput.Timeout = 1
@@ -76,9 +59,9 @@ func (config *DefaultConfig) validateInfluxInputs() error {
 			return err
 		}
 		config.inputs[name] = influxInput
-		config.log.Debugf("Successfully validated influx input '%s'", name)
+		config.log.Infof("Successfully validated influx input '%s'", name)
 	}
-	config.log.Debugln("Successfully validated all influx inputs")
+	config.log.Infoln("Successfully validated all influx inputs")
 	return nil
 }
 
@@ -88,14 +71,15 @@ func (config *DefaultConfig) validateKafkaInputs() error {
 		return err
 	}
 	for name, kafkaInput := range kafkaInputs {
+		config.log.Infof("Validating kafka input '%s'", name)
 		kafkaInput.Name = name
 		if err := config.validate.Struct(kafkaInput); err != nil {
 			return err
 		}
 		config.inputs[name] = kafkaInput
-		config.log.Debugf("Successfully validated kafka input '%s'", name)
+		config.log.Infof("Successfully validated kafka input '%s'", name)
 	}
-	config.log.Debugln("Successfully validated all kafka inputs")
+	config.log.Infof("Successfully validated all kafka inputs")
 	return nil
 }
 
@@ -118,7 +102,7 @@ func (config *DefaultConfig) validateInputs() error {
 			return err
 		}
 	}
-	config.log.Debugln("Successfully validated all inputs")
+	config.log.Infoln("Successfully validated all inputs")
 	return nil
 }
 
@@ -128,14 +112,15 @@ func (config *DefaultConfig) validateArangoOutputs() error {
 		return err
 	}
 	for name, arangoOutput := range arangoOutputs {
+		config.log.Infof("Validating arango output '%s'", name)
 		arangoOutput.Name = name
 		if err := config.validate.Struct(arangoOutput); err != nil {
 			return err
 		}
 		config.outputs[name] = arangoOutput
-		config.log.Debugf("Successfully validated arango output '%s'", name)
+		config.log.Infof("Successfully validated arango output '%s'", name)
 	}
-	config.log.Debugln("Successfully validated all arango outputs")
+	config.log.Infoln("Successfully validated all arango outputs")
 	return nil
 }
 
@@ -145,14 +130,15 @@ func (config *DefaultConfig) validateKafkaOutputs() error {
 		return err
 	}
 	for name, kafkaOutput := range kafkaOutputs {
+		config.log.Infof("Validating kafka output '%s'", name)
 		kafkaOutput.Name = name
 		if err := config.validate.Struct(kafkaOutput); err != nil {
 			return err
 		}
 		config.outputs[name] = kafkaOutput
-		config.log.Debugf("Successfully validated kafka output '%s'", name)
+		config.log.Infof("Successfully validated kafka output '%s'", name)
 	}
-	config.log.Debugln("Successfully validated all kafka outputs")
+	config.log.Infoln("Successfully validated all kafka outputs")
 	return nil
 }
 
@@ -175,7 +161,7 @@ func (config *DefaultConfig) validateOutputs() error {
 			return err
 		}
 	}
-	config.log.Debugln("Successfully validated all outputs")
+	config.log.Infoln("Successfully validated all outputs")
 	return nil
 }
 
@@ -214,10 +200,10 @@ func (config *DefaultConfig) validateTelemetryToArango() error {
 			return err
 		}
 		config.processors[name] = processor
-		config.log.Debugf("Successfully validated TelemetryToArango processor '%s'", name)
+		config.log.Infof("Successfully validated TelemetryToArango processor '%s'", name)
 	}
 
-	config.log.Debugln("Successfully validated all TelemetryToArango processors")
+	config.log.Infoln("Successfully validated all TelemetryToArango processors")
 	return nil
 }
 
@@ -225,7 +211,7 @@ func (config *DefaultConfig) validateProcessors() error {
 	if err := config.validateTelemetryToArango(); err != nil {
 		return err
 	}
-	config.log.Debugf("Successfully validated all processors")
+	config.log.Infof("Successfully validated all processors")
 	return nil
 }
 

@@ -37,51 +37,51 @@ func NewDefaultProcessorManager(config config.Config, inputManager input.InputMa
 	}
 }
 
-func (manager *DefaultProcessorManager) initTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfig, inputResources map[string]input.InputResource, outputResources map[string]output.OutputResource) (error, *TelemetryToArangoProcessor) {
+func (manager *DefaultProcessorManager) initTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfig, inputResources map[string]input.InputResource, outputResources map[string]output.OutputResource) (*TelemetryToArangoProcessor, error) {
 	processor := NewTelemetryToArangoProcessor(config, inputResources, outputResources)
 	if err := processor.Init(); err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, processor
+	return processor, nil
 }
 
-func (manager *DefaultProcessorManager) getInputResources() (error, map[string]input.InputResource) {
+func (manager *DefaultProcessorManager) getInputResources() (map[string]input.InputResource, error) {
 	inputResources := make(map[string]input.InputResource)
 	for name := range manager.config.GetInputs() {
-		err, inputResource := manager.inputManager.GetInputResources(name)
+		inputResource, err := manager.inputManager.GetInputResources(name)
 		if err != nil {
-			return err, nil
+			return nil, err
 		}
 		inputResources[name] = *inputResource
 	}
-	return nil, inputResources
+	return inputResources, nil
 }
 
-func (manager *DefaultProcessorManager) getOutputResources() (error, map[string]output.OutputResource) {
+func (manager *DefaultProcessorManager) getOutputResources() (map[string]output.OutputResource, error) {
 	outputResources := make(map[string]output.OutputResource)
 	for name := range manager.config.GetOutputs() {
-		err, outputResource := manager.outputManager.GetOutputResource(name)
+		outputResource, err := manager.outputManager.GetOutputResource(name)
 		if err != nil {
-			return err, nil
+			return nil, err
 		}
 		outputResources[name] = *outputResource
 	}
-	return nil, outputResources
+	return outputResources, nil
 }
 
 func (manager *DefaultProcessorManager) Init() error {
 	for name, processorConfig := range manager.config.GetProcessors() {
-		err, inputResources := manager.getInputResources()
+		inputResources, err := manager.getInputResources()
 		if err != nil {
 			return err
 		}
-		err, outputResources := manager.getOutputResources()
+		outputResources, err := manager.getOutputResources()
 		if err != nil {
 			return err
 		}
 		switch processorConfigType := processorConfig.(type) {
 		case config.TelemetryToArangoProcessorConfig:
-			err, processor := manager.initTelemetryToArangoProcessor(processorConfigType, inputResources, outputResources)
+			processor, err := manager.initTelemetryToArangoProcessor(processorConfigType, inputResources, outputResources)
 			if err != nil {
 				return err
 			}

@@ -33,18 +33,18 @@ func NewArangoOutput(config config.ArangoOutputConfig, commandChan chan message.
 	}
 }
 
-func (output *ArangoOutput) createNewConnection() (error, driver.Connection) {
+func (output *ArangoOutput) createNewConnection() (driver.Connection, error) {
 	connection, err := http.NewConnection(http.ConnectionConfig{
 		Endpoints: []string{output.config.URL},
 	})
 	if err != nil {
-		return fmt.Errorf("error creating ArangoDB connection: %v", err), nil
+		return nil, fmt.Errorf("error creating ArangoDB connection: %v", err)
 	}
-	return nil, connection
+	return connection, nil
 }
 
 func (output *ArangoOutput) createNewClient() error {
-	err, connection := output.createNewConnection()
+	connection, err := output.createNewConnection()
 	if err != nil {
 		return err
 	}
@@ -67,13 +67,13 @@ func (output *ArangoOutput) Init() error {
 	return nil
 }
 
-func (output *ArangoOutput) getDatabase() (error, driver.Database) {
+func (output *ArangoOutput) getDatabase() (driver.Database, error) {
 	ctx := context.Background()
 	db, err := output.client.Database(ctx, output.config.DB)
 	if err != nil {
-		return fmt.Errorf("error getting database '%s': %v", output.config.DB, err), nil
+		return nil, fmt.Errorf("error getting database '%s': %v", output.config.DB, err)
 	}
-	return nil, db
+	return db, nil
 }
 
 func (output *ArangoOutput) updateField(field *uint32, value json.Number) {
@@ -115,7 +115,7 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 	return i + 1, nil
 }
 
-func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand) (error, []string, []arango.LSLink) {
+func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand) ([]string, []arango.LSLink, error) {
 	count := cursor.Count()
 	keys := make([]string, count)
 	lsLinks := make([]arango.LSLink, count)
@@ -124,7 +124,7 @@ func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Curs
 	for {
 		i, err = output.processLsLinkDocument(ctx, cursor, command, lsLinks, keys, i)
 		if driver.IsNoMoreDocuments(err) {
-			return nil, keys[:i], lsLinks[:i]
+			return keys[:i], lsLinks[:i], nil
 		} else if err != nil {
 			output.log.Errorf("Unexpected error processing document: %v", err)
 			continue
@@ -159,7 +159,7 @@ func (output *ArangoOutput) updateDocuments(ctx context.Context, db driver.Datab
 
 func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpdateCommand) {
 	output.log.Infof("Processing Arango update for collection: %s", command.Collection)
-	err, db := output.getDatabase()
+	db, err := output.getDatabase()
 	if err != nil {
 		output.log.Errorf("Error getting database: %v", err)
 		return
@@ -172,7 +172,7 @@ func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpd
 	defer cursor.Close()
 
 	if command.Collection == "ls_link" {
-		err, keys, lsLinks := output.updateLsLink(ctx, cursor, command)
+		keys, lsLinks, err := output.updateLsLink(ctx, cursor, command)
 		if err != nil {
 			output.log.Errorf("Error updating ls_link: %v", err)
 			return

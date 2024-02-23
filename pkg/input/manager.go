@@ -11,7 +11,7 @@ import (
 
 type InputManager interface {
 	InitInputs() error
-	GetInputResources(string) (error, *InputResource)
+	GetInputResources(string) (*InputResource, error)
 	StartInputs() error
 	StopInputs()
 }
@@ -73,12 +73,12 @@ func (manager *DefaultInputManager) InitInputs() error {
 	return nil
 }
 
-func (manager *DefaultInputManager) GetInputResources(name string) (error, *InputResource) {
+func (manager *DefaultInputManager) GetInputResources(name string) (*InputResource, error) {
 	input, ok := manager.inputResources[name]
 	if !ok {
-		return fmt.Errorf("input '%s' not found", name), nil
+		return nil, fmt.Errorf("input '%s' not found", name)
 	}
-	return nil, &input
+	return &input, nil
 }
 
 func (manager *DefaultInputManager) StartInputs() error {
