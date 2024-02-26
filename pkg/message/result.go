@@ -19,3 +19,14 @@ type InfluxResult struct {
 	Tags  map[string]string
 	Value interface{}
 }
+
+type ArangoResultMessage struct {
+	BaseResultmessage
+	Results []ArangoResult
+	Action  string
+}
+type ArangoResult struct {
+	Key       string
+	Id        string
+	TopicType int
+}

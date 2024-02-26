@@ -31,3 +31,15 @@ type ArangoUpdate struct {
 	Value    interface{}
 	Index    *uint
 }
+
+type KafkaUpdateCommand struct {
+	BaseCommand
+	Updates []KafkaEventMessage
+}
+
+type KafkaEventMessage struct {
+	TopicType int    `json:"TopicType"`
+	Key       string `json:"_key"`
+	Id        string `json:"_id"`
+	Action    string `json:"action"`
+}

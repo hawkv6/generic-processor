@@ -17,10 +17,10 @@ outputs:
       database: jalapeno
       username: root
       password: jalapeno
-  # kafka:
-  #   jalapeno-kafka-lslink-events:
-  #     broker: 172.16.19.77:9094
-  #     topic: jalapeno.ls_node_edge_events
+  kafka:
+    jalapeno-kafka-lslink-events:
+      broker: 10.8.39.68:9094
+      topic: gobmp.parsed.ls_link_events
 
 
 processors:
@@ -31,7 +31,7 @@ processors:
           - jalapeno-influx
         outputs: 
           - jalapeno-arango
-        #   - jalapeno-kafka-lslink-events
+          - jalapeno-kafka-lslink-events
         interval: 30 # seconds
         modes:
           - input-options:

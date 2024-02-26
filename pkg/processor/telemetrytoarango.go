@@ -113,9 +113,16 @@ func (processor *TelemetryToArangoProcessor) startSchedulingInfluxCommands(name 
 	processor.log.Infof("Starting scheduling Influx commands for '%s' input every %d seconds", name, processor.config.Interval)
 	ticker := time.NewTicker(time.Duration(processor.config.Interval) * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		processor.log.Infoln("Sending Influx commands")
-		processor.sendInfluxCommands(name, commandChan)
+
+	for {
+		select {
+		case <-ticker.C:
+			processor.log.Infoln("Sending Influx commands")
+			processor.sendInfluxCommands(name, commandChan)
+		case <-processor.quitChan:
+			processor.log.Infof("Stopping scheduling Influx commands for '%s' input", name)
+			return
+		}
 	}
 }
 
@@ -187,10 +194,16 @@ func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name str
 				processor.log.Errorf("Received unknown output name: %v", outputName)
 				continue
 			}
-			if outputOption.Method == "update" {
-				processor.sendArangoUpdateCommands(outputOption, msgType.Results, outputResource.CommandChan)
-			} else {
-				processor.log.Errorf("Received unknown output method: %v", msgType.OutputOptions[outputName].Method)
+
+			switch output := outputResource.Output.(type) {
+			case *output.ArangoOutput:
+				if outputOption.Method == "update" {
+					processor.sendArangoUpdateCommands(outputOption, msgType.Results, outputResource.CommandChan)
+				}
+			case *output.KafkaOutput:
+				continue
+			default:
+				processor.log.Errorf("Received not yet supported output type: %v", output)
 			}
 		}
 	default:
@@ -213,6 +226,39 @@ func (processor *TelemetryToArangoProcessor) startInfluxProcessing(name string, 
 	}
 }
 
+func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOutputs map[string]output.OutputResource, arangoResultChannels map[string]chan message.Result) {
+	for {
+		select {
+		case <-processor.quitChan:
+			return
+		default:
+			for _, arangoResultChannel := range arangoResultChannels {
+				for msg := range arangoResultChannel {
+					switch msgType := msg.(type) {
+					case message.ArangoResultMessage:
+						commandMessage := message.KafkaUpdateCommand{}
+						commandMessage.Updates = make([]message.KafkaEventMessage, len(msgType.Results))
+						for index, result := range msgType.Results {
+							commandMessage.Updates[index] = message.KafkaEventMessage{
+								TopicType: result.TopicType,
+								Key:       result.Key,
+								Id:        result.Id,
+								Action:    "update",
+							}
+							processor.log.Debugf("Received Arango result: %v", result)
+						}
+						for _, output := range kafkaOutputs {
+							output.CommandChan <- commandMessage
+						}
+					default:
+						processor.log.Errorf("Received unknown message type: %v", msgType)
+					}
+				}
+			}
+		}
+	}
+}
+
 func (processor *TelemetryToArangoProcessor) Start() {
 	processor.log.Infof("Starting TelemetryToArangoProcessor '%s'", processor.name)
 	for name, inputResource := range processor.inputResources {
@@ -223,6 +269,18 @@ func (processor *TelemetryToArangoProcessor) Start() {
 			go processor.startInfluxProcessing(name, input, inputResource.CommandChan, inputResource.ResultChan)
 		}
 	}
+
+	arangoResultChannels := make(map[string]chan message.Result)
+	kafkaOutputs := make(map[string]output.OutputResource)
+	for name, outputResource := range processor.outputResources {
+		switch outputResource.Output.(type) {
+		case *output.ArangoOutput:
+			arangoResultChannels[name] = outputResource.ResultChan
+		case *output.KafkaOutput:
+			kafkaOutputs[name] = outputResource
+		}
+	}
+	go processor.processArangoResultMessages(kafkaOutputs, arangoResultChannels)
 }
 
 func (processor *TelemetryToArangoProcessor) Stop() {

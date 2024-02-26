@@ -46,7 +46,7 @@ func (manager *DefaultOutputManager) initArangoOutput(name string, configType co
 
 func (manager *DefaultOutputManager) initKafkaOutput(name string, configType config.KafkaOutputConfig) error {
 	outputResource := NewOutputResource()
-	output := NewKafkaOutput(configType)
+	output := NewKafkaOutput(configType, outputResource.CommandChan, outputResource.ResultChan)
 	if err := output.Init(); err != nil {
 		return err
 	}

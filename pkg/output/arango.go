@@ -157,6 +157,15 @@ func (output *ArangoOutput) updateDocuments(ctx context.Context, db driver.Datab
 	return nil
 }
 
+func (output *ArangoOutput) getTopicType(collection string) int {
+	// from: https://github.com/cisco-open/jalapeno/blob/main/topology/dbclient/dbclient.go
+	if collection == "ls_link" {
+		return 9
+	}
+	output.log.Errorf("Unknown collection: %s", collection)
+	return 0
+}
+
 func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpdateCommand) {
 	output.log.Infof("Processing Arango update for collection: %s", command.Collection)
 	db, err := output.getDatabase()
@@ -182,6 +191,19 @@ func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpd
 			output.log.Errorf("Error updating documents: %v", err)
 			return
 		}
+		arangoResultMessage := message.ArangoResultMessage{
+			Results: make([]message.ArangoResult, len(keys)),
+		}
+
+		for index, link := range lsLinks {
+			arangoResultMessage.Results[index] =
+				message.ArangoResult{
+					Key:       link.Key,
+					Id:        link.ID,
+					TopicType: output.getTopicType(command.Collection),
+				}
+		}
+		output.resultChan <- arangoResultMessage
 	} else {
 		output.log.Errorf("Unknown collection: %s", command.Collection)
 		return
@@ -189,12 +211,17 @@ func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpd
 }
 
 func (output *ArangoOutput) Start() {
-	for command := range output.commandChan {
-		switch cmdType := command.(type) {
-		case message.ArangoUpdateCommand:
-			output.processArangoUpdateCommand(cmdType)
-		default:
-			output.log.Errorf("Unknown command type: %v", command)
+	for {
+		select {
+		case command := <-output.commandChan:
+			switch cmdType := command.(type) {
+			case message.ArangoUpdateCommand:
+				output.processArangoUpdateCommand(cmdType)
+			default:
+				output.log.Errorf("Unknown command type: %v", command)
+			}
+		case <-output.quitChan:
+			return
 		}
 	}
 }
