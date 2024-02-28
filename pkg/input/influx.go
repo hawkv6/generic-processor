@@ -55,7 +55,6 @@ func (input *InfluxInput) queryDB(query string) (res []client.Result, err error)
 		Command:  query,
 		Database: input.inputConfig.DB,
 	}
-	input.log.Debugln("Executing InfluxDB query: ", q)
 	if response, err := input.client.Query(q); err == nil {
 		if response.Error() != nil {
 			return res, response.Error()
@@ -80,7 +79,6 @@ func (input *InfluxInput) createQuery(command message.InfluxQueryCommand) string
 }
 
 func (input *InfluxInput) sendResults(results []client.Result, command message.InfluxQueryCommand) {
-	input.log.Debugln("Sending InfluxDB results")
 	resultMessage := message.InfluxResultMessage{
 		OutputOptions: command.OutputOptions,
 	}
@@ -88,6 +86,7 @@ func (input *InfluxInput) sendResults(results []client.Result, command message.I
 		input.log.Errorf("No results returned from InfluxDB query")
 		return
 	}
+	input.log.Infof("Retrieved %d results from InfluxDB query", len(results[0].Series))
 	for _, row := range results[0].Series {
 		for columnIndex, columnName := range row.Columns {
 			if columnName == command.Method {
@@ -107,8 +106,8 @@ func (input *InfluxInput) sendResults(results []client.Result, command message.I
 }
 
 func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
-	input.log.Debugf("Executing InfluxDB command: %v", command)
 	query := input.createQuery(command)
+	input.log.Debugf("Executing InfluxDB query: %s", query)
 	result, err := input.queryDB(query)
 	if err != nil {
 		input.log.Errorf("Error executing InfluxDB query: %v", err)
@@ -126,11 +125,12 @@ func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
 }
 
 func (input *InfluxInput) Start() {
+	input.log.Infof("Starting InfluxDB input '%s'", input.inputConfig.Name)
 	for {
 		select {
 		case msg := <-input.commandChan:
 			if influxCommand, ok := msg.(message.InfluxQueryCommand); ok {
-				input.log.Debugf("Received InfluxCommand message: %v", influxCommand)
+				input.log.Debugln("Received InfluxCommand message")
 				input.executeCommand(influxCommand)
 			} else {
 				input.log.Errorf("Received invalid message type: %v", msg)

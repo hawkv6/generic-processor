@@ -186,7 +186,7 @@ func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpd
 			output.log.Errorf("Error updating ls_link: %v", err)
 			return
 		}
-		output.log.Infof("Updating %d documents", len(keys))
+		output.log.Infof("Updating %d documents in Arango", len(keys))
 		if err := output.updateDocuments(ctx, db, command, keys, lsLinks); err != nil {
 			output.log.Errorf("Error updating documents: %v", err)
 			return

@@ -83,7 +83,7 @@ func (input *KafkaInput) Init() error {
 }
 
 func (input *KafkaInput) UnmarshalTelemetryMessage(msg *sarama.ConsumerMessage) (*message.TelemetryMessage, error) {
-	input.log.Debugln("Received JSON message: ", string(msg.Value))
+	input.log.Debugln("Received JSON message from Kafka, unmarshalling...")
 	var telemetryMessage message.TelemetryMessage
 	if err := json.Unmarshal([]byte(msg.Value), &telemetryMessage); err != nil {
 		input.log.Debugln("Error unmarshalling message: ", err)
@@ -93,6 +93,7 @@ func (input *KafkaInput) UnmarshalTelemetryMessage(msg *sarama.ConsumerMessage) 
 }
 
 func (input *KafkaInput) decodeIpv6Message(telemetryMessage *message.TelemetryMessage) (*message.IPv6Message, error) {
+
 	ipv6Fields := message.IPv6Fields{}
 	if err := mapstructure.Decode(telemetryMessage.Fields, &ipv6Fields); err != nil {
 		input.log.Debugln("Error decoding IPv6 fields: ", err)
@@ -102,24 +103,25 @@ func (input *KafkaInput) decodeIpv6Message(telemetryMessage *message.TelemetryMe
 		TelemetryMessage: *telemetryMessage,
 		Fields:           ipv6Fields,
 	}
+	input.log.Debugln("Decoded IPv6 message: ", ipv6Message.Fields.IPv6)
 	return &ipv6Message, nil
 }
 
 func (input *KafkaInput) decodeInterfaceStatusMessage(telemetryMessage *message.TelemetryMessage) (*message.InterfaceStatusMessage, error) {
-	interfaceStatusFields := message.InterfaceStatusFields{}
-	if err := mapstructure.Decode(telemetryMessage.Fields, &interfaceStatusFields); err != nil {
+	intStatusFields := message.InterfaceStatusFields{}
+	if err := mapstructure.Decode(telemetryMessage.Fields, &intStatusFields); err != nil {
 		input.log.Debugln("Error decoding Interface Status fields: ", err)
 		return nil, err
 	}
-	interfaceStatusMessage := message.InterfaceStatusMessage{
+	intStatusMsg := message.InterfaceStatusMessage{
 		TelemetryMessage: *telemetryMessage,
-		Fields:           interfaceStatusFields,
+		Fields:           intStatusFields,
 	}
-	return &interfaceStatusMessage, nil
+	input.log.Debugf("Decoded Interface Status message: Router: %s, Interface: %s, AdminStatus %s, OperStatus %s", telemetryMessage.Tags.Source, intStatusMsg.Fields.Name, intStatusMsg.Fields.AdminStatus, intStatusMsg.Fields.OperStatus)
+	return &intStatusMsg, nil
 }
 
 func (input *KafkaInput) processMessage(msg *sarama.ConsumerMessage) {
-	input.log.Debugln("Received message: ", string(msg.Value))
 	telemetryMessage, err := input.UnmarshalTelemetryMessage(msg)
 	if err != nil {
 		input.log.Debugln("Error unmarshalling message: ", err)
@@ -135,7 +137,6 @@ func (input *KafkaInput) processMessage(msg *sarama.ConsumerMessage) {
 		input.log.Debugln("Error decoding message: ", err)
 		return
 	}
-	input.log.Debugln("Received message: ", message)
 	input.resultChan <- message
 }
 
@@ -152,11 +153,12 @@ func (input *KafkaInput) StartListening() {
 }
 
 func (input *KafkaInput) Start() {
+	input.log.Infof("Starting Kafka input '%s'", input.inputConfig.Name)
 	cmd := <-input.commandChan
 	if _, ok := cmd.(message.KafkaListeningCommand); ok {
 		input.StartListening()
 	} else {
-		input.log.Debugln("Received command: ", cmd)
+		input.log.Debugln("Received unknown command: ", cmd)
 	}
 }
 

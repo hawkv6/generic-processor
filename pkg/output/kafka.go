@@ -55,7 +55,6 @@ func (output *KafkaOutput) publishMessage(msg message.KafkaEventMessage) {
 	}
 	select {
 	case output.producer.Input() <- &sarama.ProducerMessage{Topic: output.config.Topic, Key: nil, Value: sarama.StringEncoder(jsonMsg)}:
-		output.log.Debugf("Successfully enqueued message %v on topic %s\n", string(jsonMsg), output.config.Topic)
 	case err := <-output.producer.Errors():
 		output.log.Errorln("Failed to produce message", err)
 	}
@@ -66,9 +65,9 @@ func (output *KafkaOutput) Start() {
 	for {
 		select {
 		case command := <-output.commandChan:
-			output.log.Debugln("Received command: ", command)
 			switch commandType := command.(type) {
 			case message.KafkaUpdateCommand:
+				output.log.Infof("Publish %d event messages to Kafka\n", len(commandType.Updates))
 				for _, msg := range commandType.Updates {
 					output.publishMessage(msg)
 				}

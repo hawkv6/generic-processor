@@ -43,7 +43,7 @@ func (processor *TelemetryToArangoProcessor) Init() error {
 }
 
 func (processor *TelemetryToArangoProcessor) processIpv6Message(msg *message.IPv6Message) {
-	processor.log.Debugf("Processing IPv6 message: %v", msg)
+	processor.log.Debugf("Processing IPv6 message for IPv6 %s", msg.Fields.IPv6)
 	if strings.Contains(msg.Tags.InterfaceName, "Ethernet") {
 		if !msg.Fields.Delete {
 			processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = msg.Fields.IPv6
@@ -54,16 +54,16 @@ func (processor *TelemetryToArangoProcessor) processIpv6Message(msg *message.IPv
 }
 
 func (processor *TelemetryToArangoProcessor) processInterfaceStatusMessage(msg *message.InterfaceStatusMessage) {
-	processor.log.Debugf("Processing InterfaceStatus message: %v", msg)
+	processor.log.Debugf("Processing Interface Status message: %s %s", msg.Tags.Source, msg.Tags.InterfaceName)
 	if strings.Contains(msg.Tags.InterfaceName, "Ethernet") {
 		if msg.Fields.AdminStatus == "UP" {
-			processor.log.Infof("Interface '%s' from router '%s' changed to UP", msg.Tags.InterfaceName, msg.Tags.Source)
+			processor.log.Debugf("Interface '%s' from router '%s' changed to UP", msg.Tags.InterfaceName, msg.Tags.Source)
 			if _, ok := processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
 				processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
 				delete(processor.deactivatedIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
 			}
 		} else {
-			processor.log.Infof("Interface '%s' from router '%s' changed to DOWN", msg.Tags.InterfaceName, msg.Tags.Source)
+			processor.log.Debugf("Interface '%s' from router '%s' changed to DOWN", msg.Tags.InterfaceName, msg.Tags.Source)
 			if _, ok := processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
 				processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
 				delete(processor.activeIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
@@ -78,7 +78,7 @@ func (processor *TelemetryToArangoProcessor) startKafkaProcessing(name string, i
 	for {
 		select {
 		case msg := <-resultChan:
-			processor.log.Debugf("Received message from '%s' input: %v", name, msg)
+			processor.log.Debugf("Received message from '%s' input", name)
 			switch msgType := msg.(type) {
 			case *message.IPv6Message:
 				processor.processIpv6Message(msgType)
@@ -166,7 +166,7 @@ func (processor *TelemetryToArangoProcessor) sendArangoUpdateCommands(outputOpti
 				localLinkIp, err := processor.getLocalLinkIp(result.Tags)
 				if err != nil {
 					processor.log.Errorln(err)
-					return
+					continue
 				}
 				filterBy[filterKey] = localLinkIp
 				key = localLinkIp
@@ -185,16 +185,14 @@ func (processor *TelemetryToArangoProcessor) sendArangoUpdateCommands(outputOpti
 }
 
 func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name string, msg message.Result) {
-	processor.log.Debugf("Received message from '%s' input: %v", name, msg)
+	processor.log.Debugf("Received message from '%s' input", name)
 	switch msgType := msg.(type) {
 	case message.InfluxResultMessage:
 		for outputName, outputResource := range processor.outputResources {
 			outputOption, ok := msgType.OutputOptions[outputName]
 			if !ok {
-				processor.log.Errorf("Received unknown output name: %v", outputName)
 				continue
 			}
-
 			switch output := outputResource.Output.(type) {
 			case *output.ArangoOutput:
 				if outputOption.Method == "update" {
@@ -236,6 +234,7 @@ func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOu
 				for msg := range arangoResultChannel {
 					switch msgType := msg.(type) {
 					case message.ArangoResultMessage:
+						processor.log.Debugf("Received %d Arango results", len(msgType.Results))
 						commandMessage := message.KafkaUpdateCommand{}
 						commandMessage.Updates = make([]message.KafkaEventMessage, len(msgType.Results))
 						for index, result := range msgType.Results {
@@ -245,7 +244,6 @@ func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOu
 								Id:        result.Id,
 								Action:    "update",
 							}
-							processor.log.Debugf("Received Arango result: %v", result)
 						}
 						for _, output := range kafkaOutputs {
 							output.CommandChan <- commandMessage
