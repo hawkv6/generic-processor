@@ -9,7 +9,7 @@
 *.dylib
 
 # built binary
-generic-processor
+bin
 
 # Test binary, built with `go test -c`
 *.test
