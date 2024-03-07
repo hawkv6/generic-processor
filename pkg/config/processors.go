@@ -24,11 +24,16 @@ type Mode struct {
 }
 
 type InputOption struct {
-	Name        string   `koanf:"name" validate:"required"`
-	Measurement string   `koanf:"measurement" validate:"required"`
-	Field       string   `koanf:"field" validate:"required"`
-	Method      string   `koanf:"method" validate:"required"`
-	GroupBy     []string `koanf:"group_by" validate:"required"`
+	Name           string          `koanf:"name" validate:"required"`
+	Measurement    string          `koanf:"measurement" validate:"required"`
+	Field          string          `koanf:"field" validate:"required"`
+	Method         string          `koanf:"method" validate:"required"`
+	GroupBy        []string        `koanf:"group_by" validate:"required"`
+	Transformation *Transformation `koanf:"transformation"`
+}
+type Transformation struct {
+	Operation string `koanf:"operation" validate:"required"`
+	Period    uint   `koanf:"period" validate:"required"`
 }
 
 type OutputOption struct {
@@ -37,5 +42,4 @@ type OutputOption struct {
 	Collection string   `koanf:"collection" validate:"required"`
 	FilterBy   []string `koanf:"filter_by" validate:"required"`
 	Field      string   `koanf:"field" validate:"required"`
-	Index      *uint    `koanf:"index"`
 }

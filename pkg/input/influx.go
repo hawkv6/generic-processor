@@ -67,10 +67,18 @@ func (input *InfluxInput) queryDB(query string) (res []client.Result, err error)
 }
 
 func (input *InfluxInput) createQuery(command message.InfluxQueryCommand) string {
-	query := fmt.Sprintf(`SELECT %s("%s") FROM "%s" WHERE time > now() - %ds AND time <= now() GROUP BY`, command.Method, command.Field, command.Measurement, command.Interval)
+	var query string
+	if command.Transformation == nil {
+		query = fmt.Sprintf(`SELECT %s("%s") FROM "%s" WHERE time > now() - %ds AND time <= now() GROUP BY`, command.Method, command.Field, command.Measurement, command.Interval)
+	} else {
+		query = fmt.Sprintf(`SELECT %s(%s("%s"),%ds) FROM "%s" WHERE time > now() - %ds AND time <= now() GROUP BY`, command.Transformation.Operation, command.Method, command.Field, command.Transformation.Period, command.Measurement, command.Interval)
+	}
 
 	for i, name := range command.GroupBy {
-		if i != 0 {
+		if command.Transformation != nil && i == 0 {
+			query += fmt.Sprintf(` time(%ds), `, command.Interval)
+		}
+		if i > 0 {
 			query += ","
 		}
 		query += fmt.Sprintf(` "%s"`, name)
@@ -89,7 +97,7 @@ func (input *InfluxInput) sendResults(results []client.Result, command message.I
 	input.log.Infof("Retrieved %d results from InfluxDB query", len(results[0].Series))
 	for _, row := range results[0].Series {
 		for columnIndex, columnName := range row.Columns {
-			if columnName == command.Method {
+			if columnName == command.Method || (command.Transformation != nil && command.Transformation.Operation == columnName) {
 				if len(row.Values) == 0 {
 					input.log.Errorf("No values returned from InfluxDB query")
 					return

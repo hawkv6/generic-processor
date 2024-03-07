@@ -93,7 +93,6 @@ func (input *KafkaInput) UnmarshalTelemetryMessage(msg *sarama.ConsumerMessage) 
 }
 
 func (input *KafkaInput) decodeIpv6Message(telemetryMessage *message.TelemetryMessage) (*message.IPv6Message, error) {
-
 	ipv6Fields := message.IPv6Fields{}
 	if err := mapstructure.Decode(telemetryMessage.Fields, &ipv6Fields); err != nil {
 		input.log.Debugln("Error decoding IPv6 fields: ", err)

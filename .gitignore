@@ -25,3 +25,6 @@ go.work
 
 #VSCode
 .vscode
+
+# Binaries
+bin

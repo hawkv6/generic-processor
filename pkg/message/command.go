@@ -11,12 +11,13 @@ type KafkaListeningCommand struct{ BaseCommand }
 
 type InfluxQueryCommand struct {
 	BaseCommand
-	Measurement   string
-	Field         string
-	Method        string
-	GroupBy       []string
-	Interval      uint
-	OutputOptions map[string]config.OutputOption
+	Measurement    string
+	Field          string
+	Method         string
+	Transformation *config.Transformation
+	GroupBy        []string
+	Interval       uint
+	OutputOptions  map[string]config.OutputOption
 }
 
 type ArangoUpdateCommand struct {
@@ -25,11 +26,16 @@ type ArangoUpdateCommand struct {
 	Updates    map[string]ArangoUpdate
 }
 
+func NewArangoUpdateCommand(collection string) *ArangoUpdateCommand {
+	return &ArangoUpdateCommand{
+		Collection: collection,
+		Updates:    make(map[string]ArangoUpdate),
+	}
+}
+
 type ArangoUpdate struct {
-	FilterBy map[string]interface{}
-	Field    string
-	Value    interface{}
-	Index    *uint
+	Fields []string
+	Values []interface{}
 }
 
 type KafkaUpdateCommand struct {

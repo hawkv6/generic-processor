@@ -72,7 +72,7 @@ func (processor *TelemetryToArangoProcessor) processInterfaceStatusMessage(msg *
 	}
 }
 
-func (processor *TelemetryToArangoProcessor) startKafkaProcessing(name string, input *input.KafkaInput, commandChan chan message.Command, resultChan chan message.Result) {
+func (processor *TelemetryToArangoProcessor) startKafkaProcessing(name string, commandChan chan message.Command, resultChan chan message.Result) {
 	commandChan <- message.KafkaListeningCommand{}
 	processor.log.Debugf("Starting Processing '%s' input messages", name)
 	for {
@@ -84,6 +84,8 @@ func (processor *TelemetryToArangoProcessor) startKafkaProcessing(name string, i
 				processor.processIpv6Message(msgType)
 			case *message.InterfaceStatusMessage:
 				processor.processInterfaceStatusMessage(msgType)
+			default:
+				processor.log.Errorln("Received unknown message type: ", msgType)
 			}
 		case <-processor.quitChan:
 			processor.log.Infof("Stopping Processing '%s' input messages", name)
@@ -97,19 +99,20 @@ func (processor *TelemetryToArangoProcessor) sendInfluxCommands(name string, com
 		for inputName, inputOption := range mode.InputOptions {
 			if inputName == name {
 				commandChan <- message.InfluxQueryCommand{
-					Measurement:   inputOption.Measurement,
-					Field:         inputOption.Field,
-					Method:        inputOption.Method,
-					GroupBy:       inputOption.GroupBy,
-					Interval:      processor.config.Interval,
-					OutputOptions: mode.OutputOptions,
+					Measurement:    inputOption.Measurement,
+					Field:          inputOption.Field,
+					Transformation: inputOption.Transformation,
+					Method:         inputOption.Method,
+					GroupBy:        inputOption.GroupBy,
+					Interval:       processor.config.Interval,
+					OutputOptions:  mode.OutputOptions,
 				}
 			}
 		}
 	}
 }
 
-func (processor *TelemetryToArangoProcessor) startSchedulingInfluxCommands(name string, input *input.InfluxInput, commandChan chan message.Command) {
+func (processor *TelemetryToArangoProcessor) startSchedulingInfluxCommands(name string, commandChan chan message.Command) {
 	processor.log.Infof("Starting scheduling Influx commands for '%s' input every %d seconds", name, processor.config.Interval)
 	ticker := time.NewTicker(time.Duration(processor.config.Interval) * time.Second)
 	defer ticker.Stop()
@@ -129,35 +132,48 @@ func (processor *TelemetryToArangoProcessor) startSchedulingInfluxCommands(name 
 func (processor *TelemetryToArangoProcessor) getLocalLinkIp(tags map[string]string) (string, error) {
 	sourceTag, ok := tags["source"]
 	if !ok {
-		err := fmt.Errorf("Received unknown source tag: %v", sourceTag)
-		processor.log.Errorln(err)
-		return "", err
+		return "", fmt.Errorf("Received unknown source tag: %v", sourceTag)
 	}
-	interfaceNameTag, ok := tags["interface_name"]
-	if !ok {
-		err := fmt.Errorf("Received unknown interface_name tag: %v", interfaceNameTag)
-		processor.log.Errorln(err)
-		return "", err
+	ipv6Address := ""
+	for key, value := range tags {
+		if key != "source" {
+			ipv6Address := processor.activeIpv6Addresses[sourceTag+value]
+			if ipv6Address != "" {
+				return ipv6Address, nil
+			}
+		}
 	}
-	ipv6Address := processor.activeIpv6Addresses[sourceTag+interfaceNameTag]
 	if ipv6Address == "" {
-		err := fmt.Errorf("Received empty IPv6 address for source: %v and interface_name: %v", sourceTag, interfaceNameTag)
-		processor.log.Errorln(err)
-		return "", err
+		return "", fmt.Errorf("Received empty IPv6 address for source: %v tried combination with all received tags: %v", sourceTag, tags)
 	}
 	return ipv6Address, nil
 }
 
-func (processor *TelemetryToArangoProcessor) sendArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, commandChan chan message.Command) {
-	updateCommand := message.ArangoUpdateCommand{
-		Collection: outputOption.Collection,
-		Updates:    make(map[string]message.ArangoUpdate),
+func (processor *TelemetryToArangoProcessor) sendArangoUpdateCommands(arangoUpdateCommands map[string]map[string]message.ArangoUpdateCommand) {
+	for name, outputResource := range processor.outputResources {
+		if arangoUpdateCommand, ok := arangoUpdateCommands[name]; ok {
+			for collection, command := range arangoUpdateCommand {
+				outputResource.CommandChan <- command
+				processor.log.Debugf("Sending Arango update command for collection: %s", collection)
+			}
+		}
 	}
+}
+
+func (processor *TelemetryToArangoProcessor) checkValidInterfaceName(tags map[string]string) bool {
+	for _, value := range tags {
+		if strings.Contains(value, "Ethernet") {
+			return true
+		}
+	}
+	return false
+}
+
+func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, command message.ArangoUpdateCommand) {
 	for _, result := range results {
-		update := message.ArangoUpdate{
-			Field: outputOption.Field,
-			Value: result.Value,
-			Index: outputOption.Index,
+		if !processor.checkValidInterfaceName(result.Tags) {
+			processor.log.Debugf("Received not supported interface name: %v", result.Tags)
+			continue
 		}
 		filterBy := make(map[string]interface{})
 		var key string
@@ -174,49 +190,75 @@ func (processor *TelemetryToArangoProcessor) sendArangoUpdateCommands(outputOpti
 				processor.log.Errorf("Received not supported filter_by value: %v", filterKey)
 			}
 		}
-		update.FilterBy = filterBy
 		if key == "" {
 			processor.log.Errorf("Received empty key for filter_by: %v", outputOption.FilterBy)
-			return
+			continue
 		}
-		updateCommand.Updates[key] = update
+		var update message.ArangoUpdate
+		if _, ok := command.Updates[key]; !ok {
+			update = message.ArangoUpdate{
+				Fields: make([]string, 0),
+				Values: make([]interface{}, 0),
+			}
+			update.Fields = append(update.Fields, outputOption.Field)
+			update.Values = append(update.Values, result.Value)
+		} else {
+			update = command.Updates[key]
+			update.Fields = append(update.Fields, outputOption.Field)
+			update.Values = append(update.Values, result.Value)
+		}
+		command.Updates[key] = update
 	}
-	commandChan <- updateCommand
 }
 
-func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name string, msg message.Result) {
-	processor.log.Debugf("Received message from '%s' input", name)
-	switch msgType := msg.(type) {
-	case message.InfluxResultMessage:
-		for outputName, outputResource := range processor.outputResources {
-			outputOption, ok := msgType.OutputOptions[outputName]
-			if !ok {
-				continue
-			}
-			switch output := outputResource.Output.(type) {
-			case *output.ArangoOutput:
-				if outputOption.Method == "update" {
-					processor.sendArangoUpdateCommands(outputOption, msgType.Results, outputResource.CommandChan)
+func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name string, messages []message.Result) {
+	arangoUpdateCommands := make(map[string]map[string]message.ArangoUpdateCommand)
+
+	processor.log.Debugf("Received %d different types of result messages from '%s' input", len(messages), name)
+	for _, msg := range messages {
+		switch msgType := msg.(type) {
+		case message.InfluxResultMessage:
+			for name, outputOption := range msgType.OutputOptions {
+				switch output := processor.outputResources[name].Output.(type) {
+				case *output.ArangoOutput:
+					if outputOption.Method == "update" {
+						if _, ok := arangoUpdateCommands[name]; !ok {
+							arangoUpdateCommands[name] = make(map[string]message.ArangoUpdateCommand)
+						}
+						if _, ok := arangoUpdateCommands[name][outputOption.Collection]; !ok {
+							arangoUpdateCommands[name][outputOption.Collection] = *message.NewArangoUpdateCommand(outputOption.Collection)
+						}
+						processor.createArangoUpdateCommands(outputOption, msgType.Results, arangoUpdateCommands[name][outputOption.Collection])
+					}
+				default:
+					processor.log.Errorf("Received not yet supported output type: %v", output)
 				}
-			case *output.KafkaOutput:
-				continue
-			default:
-				processor.log.Errorf("Received not yet supported output type: %v", output)
+
 			}
+		default:
+			processor.log.Errorf("Received unknown message type from influx: %v", msgType)
 		}
-	default:
-		processor.log.Errorf("Received unknown message type: %v", msgType)
 	}
+	processor.sendArangoUpdateCommands(arangoUpdateCommands)
 }
 
-func (processor *TelemetryToArangoProcessor) startInfluxProcessing(name string, input *input.InfluxInput, commandChan chan message.Command, resultChan chan message.Result) {
+func (processor *TelemetryToArangoProcessor) startInfluxProcessing(name string, commandChan chan message.Command, resultChan chan message.Result) {
 	processor.log.Debugf("Starting Processing '%s' input messages", name)
-	go processor.startSchedulingInfluxCommands(name, input, commandChan)
-
+	go processor.startSchedulingInfluxCommands(name, commandChan)
+	modeCount := len(processor.config.Modes)
+	count := 0
+	messages := make([]message.Result, modeCount)
 	for {
 		select {
 		case msg := <-resultChan:
-			processor.processInfluxResultMessage(name, msg)
+			if count < modeCount-1 {
+				messages[count] = msg
+				count++
+			} else {
+				messages[count] = msg
+				processor.processInfluxResultMessage(name, messages)
+				count = 0
+			}
 		case <-processor.quitChan:
 			processor.log.Infof("Stopping Processing '%s' input messages", name)
 			return
@@ -260,11 +302,11 @@ func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOu
 func (processor *TelemetryToArangoProcessor) Start() {
 	processor.log.Infof("Starting TelemetryToArangoProcessor '%s'", processor.name)
 	for name, inputResource := range processor.inputResources {
-		switch input := inputResource.Input.(type) {
+		switch inputResource.Input.(type) {
 		case *input.KafkaInput:
-			go processor.startKafkaProcessing(name, input, inputResource.CommandChan, inputResource.ResultChan)
+			go processor.startKafkaProcessing(name, inputResource.CommandChan, inputResource.ResultChan)
 		case *input.InfluxInput:
-			go processor.startInfluxProcessing(name, input, inputResource.CommandChan, inputResource.ResultChan)
+			go processor.startInfluxProcessing(name, inputResource.CommandChan, inputResource.ResultChan)
 		}
 	}
 

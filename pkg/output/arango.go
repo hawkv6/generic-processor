@@ -76,13 +76,26 @@ func (output *ArangoOutput) getDatabase() (driver.Database, error) {
 	return db, nil
 }
 
-func (output *ArangoOutput) updateField(field *uint32, value json.Number) {
-	if intValue, err := value.Int64(); err == nil {
-		*field = uint32(intValue)
-	} else if floatValue, err := value.Float64(); err == nil {
-		*field = uint32(floatValue)
-	} else {
-		output.log.Errorf("Failed to convert json.Number to int64 or float64")
+func (output *ArangoOutput) updateField(field interface{}, value json.Number) {
+	switch fieldType := field.(type) {
+	case *uint32:
+		if intValue, err := value.Int64(); err == nil {
+			*fieldType = uint32(intValue)
+		} else if floatValue, err := value.Float64(); err == nil {
+			*fieldType = uint32(floatValue)
+		} else {
+			output.log.Errorf("Failed to convert json.Number to int64 or float64 for uint32 field")
+		}
+	case *float32:
+		if floatValue, err := value.Float64(); err == nil {
+			*fieldType = float32(floatValue)
+		} else if intValue, err := value.Int64(); err == nil {
+			*fieldType = float32(intValue)
+		} else {
+			output.log.Errorf("Failed to convert json.Number to float64 for float32 field")
+		}
+	default:
+		output.log.Errorf("Unsupported field type")
 	}
 }
 
@@ -97,19 +110,28 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 		output.log.Errorf("No update found for local link IP: %s", lsLink.LocalLinkIP)
 		return i, nil
 	}
-	if jsonNumber, ok := arangoUpdate.Value.(json.Number); ok {
-		if arangoUpdate.Field == "unidir_link_delay" {
-			output.updateField(&lsLink.UnidirLinkDelay, jsonNumber)
-		} else if arangoUpdate.Field == "unidir_link_delay_min_max" {
-			if arangoUpdate.Index == nil || *arangoUpdate.Index > 1 {
-				output.log.Errorf("Unknown index: %v", arangoUpdate.Index)
-				return i, nil
-			}
-			output.updateField(&lsLink.UnidirLinkDelayMinMax[*arangoUpdate.Index], jsonNumber)
-		}
-	} else {
-		output.log.Errorf("Failed to convert interface{} to json.Number")
+
+	fields := map[string]interface{}{
+		"unidir_link_delay":            &lsLink.UnidirLinkDelay,
+		"unidir_link_delay_min_max[0]": &lsLink.UnidirLinkDelayMinMax[0],
+		"unidir_link_delay_min_max[1]": &lsLink.UnidirLinkDelayMinMax[1],
+		"unidir_delay_variation":       &lsLink.UnidirDelayVariation,
+		"unidir_packet_loss":           &lsLink.UnidirPacketLoss,
+		"unidir_available_bw":          &lsLink.UnidirAvailableBW,
+		"unidir_bw_utilization":        &lsLink.UnidirBWUtilization,
 	}
+
+	for j := 0; j < len(arangoUpdate.Fields); j++ {
+		if jsonNumber, ok := arangoUpdate.Values[j].(json.Number); ok {
+			if field, ok := fields[arangoUpdate.Fields[j]]; ok {
+				output.updateField(field, jsonNumber)
+			}
+		} else {
+			output.log.Errorf("Failed to convert interface{} to json.Number")
+			return i, fmt.Errorf("failed to convert interface{} to json.Number")
+		}
+	}
+
 	lsLinks[i] = lsLink
 	keys[i] = lsLink.Key
 	return i + 1, nil
