@@ -78,6 +78,14 @@ func (output *ArangoOutput) getDatabase() (driver.Database, error) {
 
 func (output *ArangoOutput) updateField(field interface{}, value json.Number) {
 	switch fieldType := field.(type) {
+	case *uint64:
+		if intValue, err := value.Int64(); err == nil {
+			*fieldType = uint64(intValue)
+		} else if floatValue, err := value.Float64(); err == nil {
+			*fieldType = uint64(floatValue)
+		} else {
+			output.log.Errorf("Failed to convert json.Number to int64 or float64 for uint64 field")
+		}
 	case *uint32:
 		if intValue, err := value.Int64(); err == nil {
 			*fieldType = uint32(intValue)
@@ -117,6 +125,7 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 		"unidir_link_delay_min_max[1]": &lsLink.UnidirLinkDelayMinMax[1],
 		"unidir_delay_variation":       &lsLink.UnidirDelayVariation,
 		"unidir_packet_loss":           &lsLink.UnidirPacketLoss,
+		"max_link_bw_kbps":             &lsLink.MaxLinkBWKbps,
 		"unidir_available_bw":          &lsLink.UnidirAvailableBW,
 		"unidir_bw_utilization":        &lsLink.UnidirBWUtilization,
 	}
@@ -127,10 +136,10 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 				output.updateField(field, jsonNumber)
 			}
 		} else {
-			output.log.Errorf("Failed to convert interface{} to json.Number")
-			return i, fmt.Errorf("failed to convert interface{} to json.Number")
+			return i, fmt.Errorf("failed to convert %s to json.Number", arangoUpdate.Fields[j])
 		}
 	}
+	lsLink.UnidirAvailableBW = uint32(lsLink.MaxLinkBWKbps) - lsLink.UnidirBWUtilization
 
 	lsLinks[i] = lsLink
 	keys[i] = lsLink.Key

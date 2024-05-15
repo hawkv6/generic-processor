@@ -32,7 +32,7 @@ processors:
         outputs: 
           - jalapeno-arango
           - jalapeno-kafka-lslink-events
-        interval: 30 # seconds
+        interval: 20 # seconds
         modes:
           - input-options:
               jalapeno-influx:
@@ -123,7 +123,7 @@ processors:
                 method: update
                 filter_by:
                   - local_link_ip
-                field: unidir_available_bw
+                field: max_link_bw_kbps
           - input-options:
               jalapeno-influx:
                 measurement: utilization
