@@ -35,7 +35,7 @@ func NewArangoUpdateCommand(collection string) *ArangoUpdateCommand {
 
 type ArangoUpdate struct {
 	Fields []string
-	Values []interface{}
+	Values []float64
 }
 
 type KafkaUpdateCommand struct {

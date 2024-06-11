@@ -2,6 +2,7 @@ package processor
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/hawkv6/generic-processor/pkg/logging"
 	"github.com/hawkv6/generic-processor/pkg/message"
 	"github.com/hawkv6/generic-processor/pkg/output"
+	"github.com/montanaflynn/stats"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,6 +24,7 @@ type TelemetryToArangoProcessor struct {
 	deactivatedIpv6Addresses map[string]string
 	activeIpv6Addresses      map[string]string
 	quitChan                 chan struct{}
+	normalizationData        map[string][]float64
 }
 
 func NewTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfig, inputResources map[string]input.InputResource, outputResources map[string]output.OutputResource) *TelemetryToArangoProcessor {
@@ -34,6 +37,7 @@ func NewTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfi
 		deactivatedIpv6Addresses: make(map[string]string),
 		activeIpv6Addresses:      make(map[string]string),
 		quitChan:                 make(chan struct{}),
+		normalizationData:        make(map[string][]float64),
 	}
 }
 
@@ -169,7 +173,84 @@ func (processor *TelemetryToArangoProcessor) checkValidInterfaceName(tags map[st
 	return false
 }
 
-func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, command message.ArangoUpdateCommand) {
+func (processor *TelemetryToArangoProcessor) addDataToNormalize(fieldName string, value float64) {
+	if _, ok := processor.normalizationData[fieldName]; !ok {
+		processor.normalizationData[fieldName] = make([]float64, 0)
+	} else {
+		processor.normalizationData[fieldName] = append(processor.normalizationData[fieldName], value)
+	}
+}
+
+func (processor *TelemetryToArangoProcessor) getFences(data stats.Float64Data, upperFence, lowerFence *float64) error {
+	quartiles, err := stats.Quartile(data)
+	if err != nil {
+		return fmt.Errorf("Error calculating quartiles: %v", err)
+	}
+	interQuartileRange := quartiles.Q3 - quartiles.Q1
+	processor.log.Debugln("Q1: ", quartiles.Q1)
+	processor.log.Debugln("Q2 / Median: ", quartiles.Q2)
+	processor.log.Debugln("Q3: ", quartiles.Q3)
+	processor.log.Debugln("Interquartile range: ", interQuartileRange)
+	outliers, err := stats.QuartileOutliers(data)
+	if err != nil {
+		return fmt.Errorf("Error calculating outliers: %v", err)
+	}
+	processor.log.Debugf("Outliers: %+v", outliers)
+
+	min, err := stats.Min(data)
+	if err != nil {
+		return fmt.Errorf("Error calculating min: %v", err)
+	}
+
+	max, err := stats.Max(data)
+	if err != nil {
+		return fmt.Errorf("Error calculating max: %v", err)
+	}
+
+	*upperFence = math.Min(quartiles.Q3+1.5*interQuartileRange, max)
+	processor.log.Debugln("Upper fence: ", *upperFence)
+	*lowerFence = math.Max(quartiles.Q1-1.5*interQuartileRange, min)
+	processor.log.Debugln("Lower fence: ", *lowerFence)
+	return nil
+}
+
+// func (processor *TelemetryToArangoProcessor) applyNormalization(update *message.ArangoUpdate, outputField string, value, lowerFence, upperFence float64) {
+// 	normalizedValue := (float64(value) - lowerFence) / (upperFence - lowerFence)
+// 	if normalizedValue < 0 {
+// 		normalizedValue = 0
+// 	} else if normalizedValue > 1 {
+// 		normalizedValue = 1
+// 	}
+// 	update.Fields = append(update.Fields, outputField)
+// 	update.Values = append(update.Values, normalizedValue)
+// }
+
+func (processor *TelemetryToArangoProcessor) normalizeValues(updates map[string]message.ArangoUpdate, inputField, outputField string, index int) {
+	for key, update := range updates {
+		if _, ok := processor.normalizationData[inputField]; ok {
+			data := stats.LoadRawData(processor.normalizationData[inputField])
+			upperFence, lowerFence := 0.0, 0.0
+			if err := processor.getFences(data, &upperFence, &lowerFence); err != nil {
+				processor.log.Errorln(err)
+				continue
+			}
+			value := update.Values[index]
+			// processor.applyNormalization(&update, outputField, value, lowerFence, upperFence)
+
+			normalizedValue := (float64(value) - lowerFence) / (upperFence - lowerFence)
+			if normalizedValue < 0 {
+				normalizedValue = 0.0000000001
+			} else if normalizedValue > 1 {
+				normalizedValue = 1
+			}
+			update.Fields = append(update.Fields, outputField)
+			update.Values = append(update.Values, normalizedValue)
+			updates[key] = update
+		}
+	}
+}
+
+func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, command message.ArangoUpdateCommand, index int) {
 	for _, result := range results {
 		if !processor.checkValidInterfaceName(result.Tags) {
 			processor.log.Debugf("Received not supported interface name: %v", result.Tags)
@@ -198,16 +279,21 @@ func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOp
 		if _, ok := command.Updates[key]; !ok {
 			update = message.ArangoUpdate{
 				Fields: make([]string, 0),
-				Values: make([]interface{}, 0),
+				Values: make([]float64, 0),
 			}
-			update.Fields = append(update.Fields, outputOption.Field)
-			update.Values = append(update.Values, result.Value)
 		} else {
 			update = command.Updates[key]
-			update.Fields = append(update.Fields, outputOption.Field)
-			update.Values = append(update.Values, result.Value)
 		}
+		update.Fields = append(update.Fields, outputOption.Field)
+		update.Values = append(update.Values, result.Value)
+		if _, ok := processor.config.Normalization.FieldMappings[outputOption.Field]; ok {
+			processor.addDataToNormalize(outputOption.Field, result.Value)
+		}
+
 		command.Updates[key] = update
+	}
+	if outputField, ok := processor.config.Normalization.FieldMappings[outputOption.Field]; ok {
+		processor.normalizeValues(command.Updates, outputOption.Field, outputField, index)
 	}
 }
 
@@ -215,7 +301,7 @@ func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name str
 	arangoUpdateCommands := make(map[string]map[string]message.ArangoUpdateCommand)
 
 	processor.log.Debugf("Received %d different types of result messages from '%s' input", len(messages), name)
-	for _, msg := range messages {
+	for index, msg := range messages {
 		switch msgType := msg.(type) {
 		case message.InfluxResultMessage:
 			for name, outputOption := range msgType.OutputOptions {
@@ -228,7 +314,7 @@ func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name str
 						if _, ok := arangoUpdateCommands[name][outputOption.Collection]; !ok {
 							arangoUpdateCommands[name][outputOption.Collection] = *message.NewArangoUpdateCommand(outputOption.Collection)
 						}
-						processor.createArangoUpdateCommands(outputOption, msgType.Results, arangoUpdateCommands[name][outputOption.Collection])
+						processor.createArangoUpdateCommands(outputOption, msgType.Results, arangoUpdateCommands[name][outputOption.Collection], index)
 					}
 				default:
 					processor.log.Errorf("Received not yet supported output type: %v", output)
@@ -271,6 +357,7 @@ func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOu
 		select {
 		case <-processor.quitChan:
 			return
+		// TODO add a new message type to publish data to kafka and then grab them by telegraf and send to influx
 		default:
 			for _, arangoResultChannel := range arangoResultChannels {
 				for msg := range arangoResultChannel {

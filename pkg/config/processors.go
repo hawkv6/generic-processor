@@ -12,10 +12,15 @@ func (BaseProcessorConfig) isProcessor() {}
 
 type TelemetryToArangoProcessorConfig struct {
 	BaseProcessorConfig
-	Inputs   []string `koanf:"inputs" validate:"required"`
-	Outputs  []string `koanf:"outputs" validate:"required"`
-	Interval uint     `koanf:"interval" validate:"required"`
-	Modes    []Mode   `koanf:"modes" validate:"required"`
+	Inputs        []string      `koanf:"inputs" validate:"required"`
+	Outputs       []string      `koanf:"outputs" validate:"required"`
+	Interval      uint          `koanf:"interval" validate:"required"`
+	Normalization Normalization `koanf:"normalization" validate:"required"`
+	Modes         []Mode        `koanf:"modes" validate:"required"`
+}
+
+type Normalization struct {
+	FieldMappings map[string]string `koanf:"field-mappings" validate:"required"`
 }
 
 type Mode struct {

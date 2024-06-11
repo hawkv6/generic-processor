@@ -1,6 +1,7 @@
 package input
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -86,6 +87,18 @@ func (input *InfluxInput) createQuery(command message.InfluxQueryCommand) string
 	return query
 }
 
+func (input *InfluxInput) castValue(value interface{}) (float64, error) {
+	jsonNumber, ok := value.(json.Number)
+	if !ok {
+		return 0, fmt.Errorf("value is not a json.Number")
+	}
+	floatValue, err := jsonNumber.Float64()
+	if err != nil {
+		return 0, err
+	}
+	return floatValue, nil
+}
+
 func (input *InfluxInput) sendResults(results []client.Result, command message.InfluxQueryCommand) {
 	resultMessage := message.InfluxResultMessage{
 		OutputOptions: command.OutputOptions,
@@ -102,11 +115,16 @@ func (input *InfluxInput) sendResults(results []client.Result, command message.I
 					input.log.Errorf("No values returned from InfluxDB query")
 					return
 				}
-				result := message.InfluxResult{
-					Tags:  row.Tags,
-					Value: row.Values[0][columnIndex],
+				if value, err := input.castValue(row.Values[0][columnIndex]); err != nil {
+					input.log.Errorf("Failed to cast value: %v", err)
+				} else {
+
+					result := message.InfluxResult{
+						Tags:  row.Tags,
+						Value: value,
+					}
+					resultMessage.Results = append(resultMessage.Results, result)
 				}
-				resultMessage.Results = append(resultMessage.Results, result)
 			}
 		}
 	}

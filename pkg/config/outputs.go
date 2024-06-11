@@ -22,4 +22,5 @@ type KafkaOutputConfig struct {
 	BaseOutputConfig
 	Broker string `koanf:"broker" validate:"required,hostname_port"`
 	Topic  string `koanf:"topic" validate:"required"`
+	Type   string `koanf:"type" validate:"required"`
 }

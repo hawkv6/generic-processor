@@ -17,7 +17,7 @@ type InfluxResultMessage struct {
 
 type InfluxResult struct {
 	Tags  map[string]string
-	Value interface{}
+	Value float64
 }
 
 type ArangoResultMessage struct {

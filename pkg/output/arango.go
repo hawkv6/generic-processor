@@ -2,7 +2,6 @@ package output
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/arangodb/go-driver"
@@ -76,39 +75,30 @@ func (output *ArangoOutput) getDatabase() (driver.Database, error) {
 	return db, nil
 }
 
-func (output *ArangoOutput) updateField(field interface{}, value json.Number) {
+func (output *ArangoOutput) updateField(field interface{}, value float64) {
 	switch fieldType := field.(type) {
 	case *uint64:
-		if intValue, err := value.Int64(); err == nil {
-			*fieldType = uint64(intValue)
-		} else if floatValue, err := value.Float64(); err == nil {
-			*fieldType = uint64(floatValue)
-		} else {
-			output.log.Errorf("Failed to convert json.Number to int64 or float64 for uint64 field")
-		}
+		*fieldType = uint64(value)
 	case *uint32:
-		if intValue, err := value.Int64(); err == nil {
-			*fieldType = uint32(intValue)
-		} else if floatValue, err := value.Float64(); err == nil {
-			*fieldType = uint32(floatValue)
-		} else {
-			output.log.Errorf("Failed to convert json.Number to int64 or float64 for uint32 field")
-		}
+		*fieldType = uint32(value)
 	case *float32:
-		if floatValue, err := value.Float64(); err == nil {
-			*fieldType = float32(floatValue)
-		} else if intValue, err := value.Int64(); err == nil {
-			*fieldType = float32(intValue)
-		} else {
-			output.log.Errorf("Failed to convert json.Number to float64 for float32 field")
-		}
+		*fieldType = float32(value)
+	case *float64:
+		*fieldType = value
 	default:
 		output.log.Errorf("Unsupported field type")
 	}
 }
 
-func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand, lsLinks []arango.LSLink, keys []string, i int) (int, error) {
-	lsLink := arango.LSLink{}
+type Link struct {
+	arango.LSLink
+	NormalizedUnidirLinkDelay      float64 `json:"normalized_unidir_link_delay,omitempty"`
+	NormalizedUnidirDelayVariation float64 `json:"normalized_unidir_delay_variation,omitempty"`
+	NormalizedUnidirPacketLoss     float64 `json:"normalized_unidir_packet_loss,omitempty"`
+}
+
+func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand, lsLinks []Link, keys []string, i int) (int, error) {
+	lsLink := Link{}
 	_, err := cursor.ReadDocument(ctx, &lsLink)
 	if err != nil {
 		return i, err
@@ -120,23 +110,22 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 	}
 
 	fields := map[string]interface{}{
-		"unidir_link_delay":            &lsLink.UnidirLinkDelay,
-		"unidir_link_delay_min_max[0]": &lsLink.UnidirLinkDelayMinMax[0],
-		"unidir_link_delay_min_max[1]": &lsLink.UnidirLinkDelayMinMax[1],
-		"unidir_delay_variation":       &lsLink.UnidirDelayVariation,
-		"unidir_packet_loss":           &lsLink.UnidirPacketLoss,
-		"max_link_bw_kbps":             &lsLink.MaxLinkBWKbps,
-		"unidir_available_bw":          &lsLink.UnidirAvailableBW,
-		"unidir_bw_utilization":        &lsLink.UnidirBWUtilization,
+		"unidir_link_delay":                 &lsLink.UnidirLinkDelay,
+		"unidir_link_delay_min_max[0]":      &lsLink.UnidirLinkDelayMinMax[0],
+		"unidir_link_delay_min_max[1]":      &lsLink.UnidirLinkDelayMinMax[1],
+		"unidir_delay_variation":            &lsLink.UnidirDelayVariation,
+		"unidir_packet_loss":                &lsLink.UnidirPacketLoss,
+		"max_link_bw_kbps":                  &lsLink.MaxLinkBWKbps,
+		"unidir_available_bw":               &lsLink.UnidirAvailableBW,
+		"unidir_bw_utilization":             &lsLink.UnidirBWUtilization,
+		"normalized_unidir_link_delay":      &lsLink.NormalizedUnidirLinkDelay,
+		"normalized_unidir_delay_variation": &lsLink.NormalizedUnidirDelayVariation,
+		"normalized_unidir_packet_loss":     &lsLink.NormalizedUnidirPacketLoss,
 	}
 
 	for j := 0; j < len(arangoUpdate.Fields); j++ {
-		if jsonNumber, ok := arangoUpdate.Values[j].(json.Number); ok {
-			if field, ok := fields[arangoUpdate.Fields[j]]; ok {
-				output.updateField(field, jsonNumber)
-			}
-		} else {
-			return i, fmt.Errorf("failed to convert %s to json.Number", arangoUpdate.Fields[j])
+		if field, ok := fields[arangoUpdate.Fields[j]]; ok {
+			output.updateField(field, arangoUpdate.Values[j])
 		}
 	}
 	lsLink.UnidirAvailableBW = uint32(lsLink.MaxLinkBWKbps) - lsLink.UnidirBWUtilization
@@ -146,10 +135,10 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 	return i + 1, nil
 }
 
-func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand) ([]string, []arango.LSLink, error) {
+func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand) ([]string, []Link, error) {
 	count := cursor.Count()
 	keys := make([]string, count)
-	lsLinks := make([]arango.LSLink, count)
+	lsLinks := make([]Link, count)
 	i := 0
 	var err error
 	for {
@@ -174,7 +163,7 @@ func (output *ArangoOutput) executeQuery(ctx context.Context, db driver.Database
 	return cursor, err
 }
 
-func (output *ArangoOutput) updateDocuments(ctx context.Context, db driver.Database, command message.ArangoUpdateCommand, keys []string, lsLinks []arango.LSLink) error {
+func (output *ArangoOutput) updateDocuments(ctx context.Context, db driver.Database, command message.ArangoUpdateCommand, keys []string, lsLinks []Link) error {
 	col, err := db.Collection(ctx, command.Collection)
 	if err != nil {
 		output.log.Errorf("Error getting collection: %v", err)
@@ -220,6 +209,7 @@ func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpd
 		output.log.Infof("Updating %d documents in Arango", len(keys))
 		if err := output.updateDocuments(ctx, db, command, keys, lsLinks); err != nil {
 			output.log.Errorf("Error updating documents: %v", err)
+
 			return
 		}
 		arangoResultMessage := message.ArangoResultMessage{
