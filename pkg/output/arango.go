@@ -90,37 +90,37 @@ func (output *ArangoOutput) updateField(field interface{}, value float64) {
 	}
 }
 
-type Link struct {
+type UpdateMessage struct {
 	arango.LSLink
 	NormalizedUnidirLinkDelay      float64 `json:"normalized_unidir_link_delay,omitempty"`
 	NormalizedUnidirDelayVariation float64 `json:"normalized_unidir_delay_variation,omitempty"`
 	NormalizedUnidirPacketLoss     float64 `json:"normalized_unidir_packet_loss,omitempty"`
 }
 
-func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand, lsLinks []Link, keys []string, i int) (int, error) {
-	lsLink := Link{}
-	_, err := cursor.ReadDocument(ctx, &lsLink)
+func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand, updateMessages []UpdateMessage, keys []string, i int) (int, error) {
+	updateMessage := UpdateMessage{}
+	_, err := cursor.ReadDocument(ctx, &updateMessage)
 	if err != nil {
 		return i, err
 	}
-	arangoUpdate, ok := command.Updates[lsLink.LocalLinkIP]
+	arangoUpdate, ok := command.Updates[updateMessage.LocalLinkIP]
 	if !ok {
-		output.log.Errorf("No update found for local link IP: %s", lsLink.LocalLinkIP)
+		output.log.Errorf("No update found for local link IP: %s", updateMessage.LocalLinkIP)
 		return i, nil
 	}
 
 	fields := map[string]interface{}{
-		"unidir_link_delay":                 &lsLink.UnidirLinkDelay,
-		"unidir_link_delay_min_max[0]":      &lsLink.UnidirLinkDelayMinMax[0],
-		"unidir_link_delay_min_max[1]":      &lsLink.UnidirLinkDelayMinMax[1],
-		"unidir_delay_variation":            &lsLink.UnidirDelayVariation,
-		"unidir_packet_loss":                &lsLink.UnidirPacketLoss,
-		"max_link_bw_kbps":                  &lsLink.MaxLinkBWKbps,
-		"unidir_available_bw":               &lsLink.UnidirAvailableBW,
-		"unidir_bw_utilization":             &lsLink.UnidirBWUtilization,
-		"normalized_unidir_link_delay":      &lsLink.NormalizedUnidirLinkDelay,
-		"normalized_unidir_delay_variation": &lsLink.NormalizedUnidirDelayVariation,
-		"normalized_unidir_packet_loss":     &lsLink.NormalizedUnidirPacketLoss,
+		"unidir_link_delay":                 &updateMessage.UnidirLinkDelay,
+		"unidir_link_delay_min_max[0]":      &updateMessage.UnidirLinkDelayMinMax[0],
+		"unidir_link_delay_min_max[1]":      &updateMessage.UnidirLinkDelayMinMax[1],
+		"unidir_delay_variation":            &updateMessage.UnidirDelayVariation,
+		"unidir_packet_loss":                &updateMessage.UnidirPacketLoss,
+		"max_link_bw_kbps":                  &updateMessage.MaxLinkBWKbps,
+		"unidir_available_bw":               &updateMessage.UnidirAvailableBW,
+		"unidir_bw_utilization":             &updateMessage.UnidirBWUtilization,
+		"normalized_unidir_link_delay":      &updateMessage.NormalizedUnidirLinkDelay,
+		"normalized_unidir_delay_variation": &updateMessage.NormalizedUnidirDelayVariation,
+		"normalized_unidir_packet_loss":     &updateMessage.NormalizedUnidirPacketLoss,
 	}
 
 	for j := 0; j < len(arangoUpdate.Fields); j++ {
@@ -128,17 +128,17 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 			output.updateField(field, arangoUpdate.Values[j])
 		}
 	}
-	lsLink.UnidirAvailableBW = uint32(lsLink.MaxLinkBWKbps) - lsLink.UnidirBWUtilization
+	updateMessage.UnidirAvailableBW = uint32(updateMessage.MaxLinkBWKbps) - updateMessage.UnidirBWUtilization
 
-	lsLinks[i] = lsLink
-	keys[i] = lsLink.Key
+	updateMessages[i] = updateMessage
+	keys[i] = updateMessage.Key
 	return i + 1, nil
 }
 
-func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand) ([]string, []Link, error) {
+func (output *ArangoOutput) updateLsLink(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand) ([]string, []UpdateMessage, error) {
 	count := cursor.Count()
 	keys := make([]string, count)
-	lsLinks := make([]Link, count)
+	lsLinks := make([]UpdateMessage, count)
 	i := 0
 	var err error
 	for {
@@ -163,7 +163,7 @@ func (output *ArangoOutput) executeQuery(ctx context.Context, db driver.Database
 	return cursor, err
 }
 
-func (output *ArangoOutput) updateDocuments(ctx context.Context, db driver.Database, command message.ArangoUpdateCommand, keys []string, lsLinks []Link) error {
+func (output *ArangoOutput) updateDocuments(ctx context.Context, db driver.Database, command message.ArangoUpdateCommand, keys []string, lsLinks []UpdateMessage) error {
 	col, err := db.Collection(ctx, command.Collection)
 	if err != nil {
 		output.log.Errorf("Error getting collection: %v", err)
@@ -209,22 +209,50 @@ func (output *ArangoOutput) processArangoUpdateCommand(command message.ArangoUpd
 		output.log.Infof("Updating %d documents in Arango", len(keys))
 		if err := output.updateDocuments(ctx, db, command, keys, lsLinks); err != nil {
 			output.log.Errorf("Error updating documents: %v", err)
-
 			return
 		}
-		arangoResultMessage := message.ArangoResultMessage{
-			Results: make([]message.ArangoResult, len(keys)),
+		arangoEventNotificationMessage := message.ArangoEventNotificationMessage{
+			EventMessages: make([]message.EventMessage, len(keys)),
+		}
+
+		arangoNormalizationMessage := message.ArangoNormalizationMessage{
+			Measurement:           "normalization",
+			NormalizationMessages: make([]message.NormalizationMessage, len(keys)+len(command.StatisticalData)),
+		}
+
+		offset := 0
+		for key, value := range command.StatisticalData {
+			arangoNormalizationMessage.NormalizationMessages[offset] = message.NormalizationMessage{
+				Fields: map[string]float64{key: value},
+			}
+			offset++
 		}
 
 		for index, link := range lsLinks {
-			arangoResultMessage.Results[index] =
-				message.ArangoResult{
+			if update, ok := command.Updates[link.LocalLinkIP]; ok {
+				arangoNormalizationMessage.NormalizationMessages[offset+index] =
+					message.NormalizationMessage{
+						Tags: update.Tags,
+						Fields: map[string]float64{
+							"normalized_unidir_link_delay":      link.NormalizedUnidirLinkDelay,
+							"normalized_unidir_delay_variation": link.NormalizedUnidirDelayVariation,
+							"normalized_unidir_packet_loss":     link.NormalizedUnidirPacketLoss,
+						},
+					}
+			} else {
+				output.log.Errorf("No update found for local link IP: %s", link.LocalLinkIP)
+				continue
+			}
+
+			arangoEventNotificationMessage.EventMessages[index] =
+				message.EventMessage{
 					Key:       link.Key,
 					Id:        link.ID,
 					TopicType: output.getTopicType(command.Collection),
 				}
 		}
-		output.resultChan <- arangoResultMessage
+		output.resultChan <- arangoEventNotificationMessage
+		output.resultChan <- arangoNormalizationMessage
 	} else {
 		output.log.Errorf("Unknown collection: %s", command.Collection)
 		return

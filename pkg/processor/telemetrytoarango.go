@@ -37,7 +37,6 @@ func NewTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfi
 		deactivatedIpv6Addresses: make(map[string]string),
 		activeIpv6Addresses:      make(map[string]string),
 		quitChan:                 make(chan struct{}),
-		normalizationData:        make(map[string][]float64),
 	}
 }
 
@@ -181,10 +180,28 @@ func (processor *TelemetryToArangoProcessor) addDataToNormalize(fieldName string
 	}
 }
 
-func (processor *TelemetryToArangoProcessor) getFences(data stats.Float64Data, upperFence, lowerFence *float64) error {
+type StatisticalData struct {
+	q1                 float64
+	q3                 float64
+	interQuartileRange float64
+	lowerFence         float64
+	upperFence         float64
+}
+
+func NewStatisticalData(q1, q3, iqr, lowerFence, upperFence float64) *StatisticalData {
+	return &StatisticalData{
+		q1:                 q1,
+		q3:                 q3,
+		interQuartileRange: iqr,
+		lowerFence:         lowerFence,
+		upperFence:         upperFence,
+	}
+}
+
+func (processor *TelemetryToArangoProcessor) getFences(data stats.Float64Data, upperFence, lowerFence *float64) (*StatisticalData, error) {
 	quartiles, err := stats.Quartile(data)
 	if err != nil {
-		return fmt.Errorf("Error calculating quartiles: %v", err)
+		return nil, fmt.Errorf("Error calculating quartiles: %v", err)
 	}
 	interQuartileRange := quartiles.Q3 - quartiles.Q1
 	processor.log.Debugln("Q1: ", quartiles.Q1)
@@ -193,64 +210,64 @@ func (processor *TelemetryToArangoProcessor) getFences(data stats.Float64Data, u
 	processor.log.Debugln("Interquartile range: ", interQuartileRange)
 	outliers, err := stats.QuartileOutliers(data)
 	if err != nil {
-		return fmt.Errorf("Error calculating outliers: %v", err)
+		return nil, fmt.Errorf("Error calculating outliers: %v", err)
 	}
 	processor.log.Debugf("Outliers: %+v", outliers)
 
 	min, err := stats.Min(data)
 	if err != nil {
-		return fmt.Errorf("Error calculating min: %v", err)
+		return nil, fmt.Errorf("Error calculating min: %v", err)
 	}
 
 	max, err := stats.Max(data)
 	if err != nil {
-		return fmt.Errorf("Error calculating max: %v", err)
+		return nil, fmt.Errorf("Error calculating max: %v", err)
 	}
 
 	*upperFence = math.Min(quartiles.Q3+1.5*interQuartileRange, max)
 	processor.log.Debugln("Upper fence: ", *upperFence)
 	*lowerFence = math.Max(quartiles.Q1-1.5*interQuartileRange, min)
 	processor.log.Debugln("Lower fence: ", *lowerFence)
-	return nil
+	return NewStatisticalData(quartiles.Q1, quartiles.Q3, interQuartileRange, *lowerFence, *upperFence), nil
 }
 
-// func (processor *TelemetryToArangoProcessor) applyNormalization(update *message.ArangoUpdate, outputField string, value, lowerFence, upperFence float64) {
-// 	normalizedValue := (float64(value) - lowerFence) / (upperFence - lowerFence)
-// 	if normalizedValue < 0 {
-// 		normalizedValue = 0
-// 	} else if normalizedValue > 1 {
-// 		normalizedValue = 1
-// 	}
-// 	update.Fields = append(update.Fields, outputField)
-// 	update.Values = append(update.Values, normalizedValue)
-// }
+func (processor *TelemetryToArangoProcessor) getNormalizedValue(value float64, upperFence, lowerFence float64) float64 {
+	normalizedValue := value
+	if upperFence != lowerFence {
+		normalizedValue = (value - lowerFence) / (upperFence - lowerFence)
+		if normalizedValue <= 0 {
+			normalizedValue = 0.0000000001
+		} else if normalizedValue > 1 {
+			normalizedValue = 1
+		}
+	} else {
+		processor.log.Warnf("Upper fence and lower fence are equal: %v", upperFence)
+	}
+	return normalizedValue
+}
 
-func (processor *TelemetryToArangoProcessor) normalizeValues(updates map[string]message.ArangoUpdate, inputField, outputField string, index int) {
-	for key, update := range updates {
-		if _, ok := processor.normalizationData[inputField]; ok {
-			data := stats.LoadRawData(processor.normalizationData[inputField])
-			upperFence, lowerFence := 0.0, 0.0
-			if err := processor.getFences(data, &upperFence, &lowerFence); err != nil {
-				processor.log.Errorln(err)
-				continue
-			}
-			value := update.Values[index]
-			// processor.applyNormalization(&update, outputField, value, lowerFence, upperFence)
-
-			normalizedValue := (float64(value) - lowerFence) / (upperFence - lowerFence)
-			if normalizedValue < 0 {
-				normalizedValue = 0.0000000001
-			} else if normalizedValue > 1 {
-				normalizedValue = 1
-			}
-			update.Fields = append(update.Fields, outputField)
+func (processor *TelemetryToArangoProcessor) normalizeValues(updates map[string]message.ArangoUpdate, inputField, normalizationField string) (*StatisticalData, error) {
+	if _, ok := processor.normalizationData[inputField]; ok {
+		data := stats.LoadRawData(processor.normalizationData[inputField])
+		upperFence, lowerFence := 0.0, 0.0
+		statisticalData, err := processor.getFences(data, &upperFence, &lowerFence)
+		if err != nil {
+			return nil, err
+		}
+		for key, update := range updates {
+			normalizedValue := processor.getNormalizedValue(update.Values[len(update.Values)-1], upperFence, lowerFence)
+			update.Fields = append(update.Fields, normalizationField)
 			update.Values = append(update.Values, normalizedValue)
 			updates[key] = update
 		}
+		return statisticalData, nil
+	} else {
+		return nil, fmt.Errorf("No data to normalize for field: %v", inputField)
 	}
+
 }
 
-func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, command message.ArangoUpdateCommand, index int) {
+func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOption config.OutputOption, results []message.InfluxResult, command message.ArangoUpdateCommand) {
 	for _, result := range results {
 		if !processor.checkValidInterfaceName(result.Tags) {
 			processor.log.Debugf("Received not supported interface name: %v", result.Tags)
@@ -278,6 +295,7 @@ func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOp
 		var update message.ArangoUpdate
 		if _, ok := command.Updates[key]; !ok {
 			update = message.ArangoUpdate{
+				Tags:   result.Tags,
 				Fields: make([]string, 0),
 				Values: make([]float64, 0),
 			}
@@ -289,11 +307,20 @@ func (processor *TelemetryToArangoProcessor) createArangoUpdateCommands(outputOp
 		if _, ok := processor.config.Normalization.FieldMappings[outputOption.Field]; ok {
 			processor.addDataToNormalize(outputOption.Field, result.Value)
 		}
-
 		command.Updates[key] = update
 	}
-	if outputField, ok := processor.config.Normalization.FieldMappings[outputOption.Field]; ok {
-		processor.normalizeValues(command.Updates, outputOption.Field, outputField, index)
+	if normalizationField, ok := processor.config.Normalization.FieldMappings[outputOption.Field]; ok {
+		// processor.normalizeValues(command.Updates, outputOption.Field, normalizationField)
+		statisticalData, err := processor.normalizeValues(command.Updates, outputOption.Field, normalizationField)
+		if err != nil {
+			processor.log.Errorln(err)
+		} else {
+			command.StatisticalData[fmt.Sprintf("%s_%s", outputOption.Field, "q1")] = statisticalData.q1
+			command.StatisticalData[fmt.Sprintf("%s_%s", outputOption.Field, "q3")] = statisticalData.q3
+			command.StatisticalData[fmt.Sprintf("%s_%s", outputOption.Field, "iqr")] = statisticalData.interQuartileRange
+			command.StatisticalData[fmt.Sprintf("%s_%s", outputOption.Field, "lower_fence")] = statisticalData.lowerFence
+			command.StatisticalData[fmt.Sprintf("%s_%s", outputOption.Field, "upper_fence")] = statisticalData.upperFence
+		}
 	}
 }
 
@@ -301,7 +328,7 @@ func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name str
 	arangoUpdateCommands := make(map[string]map[string]message.ArangoUpdateCommand)
 
 	processor.log.Debugf("Received %d different types of result messages from '%s' input", len(messages), name)
-	for index, msg := range messages {
+	for _, msg := range messages {
 		switch msgType := msg.(type) {
 		case message.InfluxResultMessage:
 			for name, outputOption := range msgType.OutputOptions {
@@ -314,7 +341,8 @@ func (processor *TelemetryToArangoProcessor) processInfluxResultMessage(name str
 						if _, ok := arangoUpdateCommands[name][outputOption.Collection]; !ok {
 							arangoUpdateCommands[name][outputOption.Collection] = *message.NewArangoUpdateCommand(outputOption.Collection)
 						}
-						processor.createArangoUpdateCommands(outputOption, msgType.Results, arangoUpdateCommands[name][outputOption.Collection], index)
+						processor.normalizationData = make(map[string][]float64)
+						processor.createArangoUpdateCommands(outputOption, msgType.Results, arangoUpdateCommands[name][outputOption.Collection])
 					}
 				default:
 					processor.log.Errorf("Received not yet supported output type: %v", output)
@@ -362,16 +390,30 @@ func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOu
 			for _, arangoResultChannel := range arangoResultChannels {
 				for msg := range arangoResultChannel {
 					switch msgType := msg.(type) {
-					case message.ArangoResultMessage:
-						processor.log.Debugf("Received %d Arango results", len(msgType.Results))
-						commandMessage := message.KafkaUpdateCommand{}
-						commandMessage.Updates = make([]message.KafkaEventMessage, len(msgType.Results))
-						for index, result := range msgType.Results {
+					case message.ArangoEventNotificationMessage:
+						processor.log.Debugf("Received %d Arango event messages", len(msgType.EventMessages))
+						commandMessage := message.KafkaEventCommand{}
+						commandMessage.Updates = make([]message.KafkaEventMessage, len(msgType.EventMessages))
+						for index, event := range msgType.EventMessages {
 							commandMessage.Updates[index] = message.KafkaEventMessage{
-								TopicType: result.TopicType,
-								Key:       result.Key,
-								Id:        result.Id,
+								TopicType: event.TopicType,
+								Key:       event.Key,
+								Id:        event.Id,
 								Action:    "update",
+							}
+						}
+						for _, output := range kafkaOutputs {
+							output.CommandChan <- commandMessage
+						}
+					case message.ArangoNormalizationMessage:
+						processor.log.Debugf("Received %d Arango normalization messages", len(msgType.NormalizationMessages))
+						commandMessage := message.KafkaNormalizationCommand{}
+						commandMessage.Updates = make([]message.KafkaNormalizationMessage, len(msgType.NormalizationMessages))
+						for index, normalization := range msgType.NormalizationMessages {
+							commandMessage.Updates[index] = message.KafkaNormalizationMessage{
+								Measurement: msgType.Measurement,
+								Tags:        normalization.Tags,
+								Fields:      normalization.Fields,
 							}
 						}
 						for _, output := range kafkaOutputs {

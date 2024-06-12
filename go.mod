@@ -45,6 +45,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-playground/validator/v10 v10.18.0
 	github.com/influxdata/influxdb v1.11.5
+	github.com/influxdata/line-protocol/v2 v2.2.1
 	github.com/knadh/koanf v1.5.0
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0

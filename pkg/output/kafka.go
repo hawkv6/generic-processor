@@ -2,12 +2,14 @@ package output
 
 import (
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/logging"
 	"github.com/hawkv6/generic-processor/pkg/message"
+	"github.com/influxdata/line-protocol/v2/lineprotocol"
 	"github.com/sirupsen/logrus"
 )
 
@@ -60,6 +62,38 @@ func (output *KafkaOutput) publishMessage(msg message.KafkaEventMessage) {
 	}
 }
 
+func (output *KafkaOutput) publishNotificationMessage(msg message.KafkaNormalizationMessage) {
+	var enc lineprotocol.Encoder
+	enc.SetPrecision(lineprotocol.Nanosecond)
+	enc.StartLine(msg.Measurement)
+
+	var keys []string
+	for key := range msg.Tags {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		enc.AddTag(key, msg.Tags[key])
+	}
+
+	for key, field := range msg.Fields {
+		enc.AddField(key, lineprotocol.MustNewValue(float64(field)))
+	}
+	enc.EndLine(time.Now())
+	if err := enc.Err(); err != nil {
+		output.log.Errorln("Error encoding line protocol: ", err)
+		return
+	}
+
+	select {
+	case output.producer.Input() <- &sarama.ProducerMessage{Topic: output.config.Topic, Key: nil, Value: sarama.ByteEncoder(enc.Bytes())}:
+	case err := <-output.producer.Errors():
+		output.log.Errorln("Failed to produce message", err)
+	}
+
+}
+
 func (output *KafkaOutput) Start() {
 	output.log.Debugln("Starting Kafka output: ", output.config.Name)
 	for {
@@ -67,10 +101,19 @@ func (output *KafkaOutput) Start() {
 		// TODO add a new command to publish dat to Kafka so that Telegraf can be used to send data to InfluxDB
 		case command := <-output.commandChan:
 			switch commandType := command.(type) {
-			case message.KafkaUpdateCommand:
-				output.log.Infof("Publish %d event messages to Kafka\n", len(commandType.Updates))
-				for _, msg := range commandType.Updates {
-					output.publishMessage(msg)
+			case message.KafkaEventCommand:
+				if output.config.Type == "event-notification" {
+					output.log.Infof("Publish %d event messages to Kafka\n", len(commandType.Updates))
+					for _, msg := range commandType.Updates {
+						output.publishMessage(msg)
+					}
+				}
+			case message.KafkaNormalizationCommand:
+				if output.config.Type == "normalization" {
+					output.log.Infof("Publish %d normalization messages to Kafka\n", len(commandType.Updates))
+					for _, msg := range commandType.Updates {
+						output.publishNotificationMessage(msg)
+					}
 				}
 			default:
 				output.log.Errorf("Unsupported command type: %v", commandType)

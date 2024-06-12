@@ -20,13 +20,24 @@ type InfluxResult struct {
 	Value float64
 }
 
-type ArangoResultMessage struct {
+type ArangoEventNotificationMessage struct {
 	BaseResultmessage
-	Results []ArangoResult
-	Action  string
+	EventMessages []EventMessage
+	Action        string
 }
-type ArangoResult struct {
+type EventMessage struct {
 	Key       string
 	Id        string
 	TopicType int
+}
+
+type ArangoNormalizationMessage struct {
+	BaseResultmessage
+	Measurement           string
+	NormalizationMessages []NormalizationMessage
+}
+
+type NormalizationMessage struct {
+	Tags   map[string]string
+	Fields map[string]float64
 }

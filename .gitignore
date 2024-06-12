@@ -28,3 +28,6 @@ go.work
 
 # Binaries
 bin
+
+# Debug
+__debug*

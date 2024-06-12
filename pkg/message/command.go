@@ -22,23 +22,26 @@ type InfluxQueryCommand struct {
 
 type ArangoUpdateCommand struct {
 	BaseCommand
-	Collection string
-	Updates    map[string]ArangoUpdate
+	Collection      string
+	StatisticalData map[string]float64
+	Updates         map[string]ArangoUpdate
 }
 
 func NewArangoUpdateCommand(collection string) *ArangoUpdateCommand {
 	return &ArangoUpdateCommand{
-		Collection: collection,
-		Updates:    make(map[string]ArangoUpdate),
+		Collection:      collection,
+		Updates:         make(map[string]ArangoUpdate),
+		StatisticalData: make(map[string]float64),
 	}
 }
 
 type ArangoUpdate struct {
+	Tags   map[string]string
 	Fields []string
-	Values []float64
+	Values []float64 // TODO: Think about introduce map for Fields and Values
 }
 
-type KafkaUpdateCommand struct {
+type KafkaEventCommand struct {
 	BaseCommand
 	Updates []KafkaEventMessage
 }
@@ -48,4 +51,15 @@ type KafkaEventMessage struct {
 	Key       string `json:"_key"`
 	Id        string `json:"_id"`
 	Action    string `json:"action"`
+}
+
+type KafkaNormalizationCommand struct {
+	BaseCommand
+	Updates []KafkaNormalizationMessage
+}
+
+type KafkaNormalizationMessage struct {
+	Measurement string
+	Tags        map[string]string
+	Fields      map[string]float64
 }

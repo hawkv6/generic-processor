@@ -24,7 +24,7 @@ outputs:
       type: event-notification
     jalapeno-kafka-normalization-metrics:
       broker: 10.8.39.68:9094
-      topic: generic-processor.normalization-metrics
+      topic: hawkv6.telemetry.normalized
       type: normalization
 
 
@@ -38,7 +38,7 @@ processors:
           - jalapeno-arango
           - jalapeno-kafka-lslink-events
           - jalapeno-kafka-normalization-metrics
-        interval: 20 # seconds
+        interval: 30 # seconds
         normalization:
           field-mappings:
             unidir_link_delay : normalized_unidir_link_delay
@@ -49,7 +49,7 @@ processors:
               jalapeno-influx:
                 measurement: performance-measurement
                 field: delay_measurement_session/last_advertisement_information/advertised_values/average
-                method: mean
+                method: median
                 group_by:
                   - interface_name
                   - source 
