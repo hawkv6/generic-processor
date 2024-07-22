@@ -22,7 +22,7 @@ type DefaultConfig struct {
 	processors     map[string]ProcessorConfig
 }
 
-func NewDefaultConfig(config string) *DefaultConfig {
+func NewDefaultConfig(configLocation string) *DefaultConfig {
 	return &DefaultConfig{
 		log:            logging.DefaultLogger.WithField("subsystem", Subsystem),
 		koanfInstance:  koanf.New("."),
@@ -30,7 +30,7 @@ func NewDefaultConfig(config string) *DefaultConfig {
 		inputs:         make(map[string]InputConfig),
 		outputs:        make(map[string]OutputConfig),
 		processors:     make(map[string]ProcessorConfig),
-		configLocation: config,
+		configLocation: configLocation,
 	}
 }
 
@@ -44,60 +44,75 @@ func (config *DefaultConfig) Read() error {
 	return nil
 }
 
-func (config *DefaultConfig) validateInfluxInputs() error {
-	var influxInputs map[string]InfluxInputConfig
-	if err := config.koanfInstance.Unmarshal("inputs.influx", &influxInputs); err != nil {
+func (config *DefaultConfig) validateInfluxInputConfig(name string, influxInput InfluxInputConfig) error {
+	config.log.Infof("Validating influx input '%s'", name)
+	influxInput.Name = name
+	if influxInput.Timeout == 0 {
+		influxInput.Timeout = 1
+	}
+	if err := config.validate.Struct(influxInput); err != nil {
 		return err
 	}
+	config.inputs[name] = influxInput
+	config.log.Infof("Successfully validated influx input '%s'", name)
+	return nil
+}
+
+func (config *DefaultConfig) validateInfluxInputs() error {
+	var influxInputs map[string]InfluxInputConfig
+	err := config.koanfInstance.Unmarshal("inputs.influx", &influxInputs)
+	if err != nil || influxInputs == nil {
+		return fmt.Errorf("Error marshalling influx inputs: %v", err)
+	}
 	for name, influxInput := range influxInputs {
-		config.log.Infof("Validating influx input '%s'", name)
-		influxInput.Name = name
-		if influxInput.Timeout == 0 {
-			influxInput.Timeout = 1
-		}
-		if err := config.validate.Struct(influxInput); err != nil {
+		err := config.validateInfluxInputConfig(name, influxInput)
+		if err != nil {
 			return err
 		}
-		config.inputs[name] = influxInput
-		config.log.Infof("Successfully validated influx input '%s'", name)
 	}
 	config.log.Infoln("Successfully validated all influx inputs")
 	return nil
 }
 
-func (config *DefaultConfig) validateKafkaInputs() error {
-	var kafkaInputs map[string]KafkaInputConfig
-	if err := config.koanfInstance.Unmarshal("inputs.kafka", &kafkaInputs); err != nil {
+func (config *DefaultConfig) validateKafkaInputConfig(name string, kafkaInput KafkaInputConfig) error {
+	config.log.Infof("Validating kafka input '%s'", name)
+	kafkaInput.Name = name
+	if err := config.validate.Struct(kafkaInput); err != nil {
 		return err
 	}
+	config.inputs[name] = kafkaInput
+	config.log.Infof("Successfully validated kafka input '%s'", name)
+	return nil
+}
+
+func (config *DefaultConfig) validateKafkaInputs() error {
+	var kafkaInputs map[string]KafkaInputConfig
+	err := config.koanfInstance.Unmarshal("inputs.kafka", &kafkaInputs)
+	if err != nil || kafkaInputs == nil {
+		return fmt.Errorf("Error marshalling kafka inputs: %v", err)
+	}
 	for name, kafkaInput := range kafkaInputs {
-		config.log.Infof("Validating kafka input '%s'", name)
-		kafkaInput.Name = name
-		if err := config.validate.Struct(kafkaInput); err != nil {
+		err := config.validateKafkaInputConfig(name, kafkaInput)
+		if err != nil {
 			return err
 		}
-		config.inputs[name] = kafkaInput
-		config.log.Infof("Successfully validated kafka input '%s'", name)
 	}
 	config.log.Infof("Successfully validated all kafka inputs")
 	return nil
 }
 
 func (config *DefaultConfig) validateInputs() error {
-	if config.koanfInstance.Get("inputs") == nil {
-		return fmt.Errorf("No inputs defined in config")
-	}
-	influxOutputDefined := config.koanfInstance.Get("inputs.influx") != nil
-	kafkaOutputDefined := config.koanfInstance.Get("inputs.kafka") != nil
-	if !influxOutputDefined && !kafkaOutputDefined {
+	influxInputDefined := config.koanfInstance.Get("inputs.influx") != nil
+	kafkaInputDefined := config.koanfInstance.Get("inputs.kafka") != nil
+	if !influxInputDefined && !kafkaInputDefined {
 		return fmt.Errorf("No valid inputs defined in config")
 	}
-	if influxOutputDefined {
+	if influxInputDefined {
 		if err := config.validateInfluxInputs(); err != nil {
 			return err
 		}
 	}
-	if kafkaOutputDefined {
+	if kafkaInputDefined {
 		if err := config.validateKafkaInputs(); err != nil {
 			return err
 		}
@@ -106,57 +121,71 @@ func (config *DefaultConfig) validateInputs() error {
 	return nil
 }
 
-func (config *DefaultConfig) validateArangoOutputs() error {
-	var arangoOutputs map[string]ArangoOutputConfig
-	if err := config.koanfInstance.Unmarshal("outputs.arango", &arangoOutputs); err != nil {
+func (config *DefaultConfig) validateArangoOutputConfig(name string, arangoOutput ArangoOutputConfig) error {
+	config.log.Infof("Validating arango output '%s'", name)
+	arangoOutput.Name = name
+	if err := config.validate.Struct(arangoOutput); err != nil {
 		return err
 	}
+	config.outputs[name] = arangoOutput
+	config.log.Infof("Successfully validated arango output '%s'", name)
+	return nil
+}
+
+func (config *DefaultConfig) validateArangoOutputs() error {
+	var arangoOutputs map[string]ArangoOutputConfig
+	err := config.koanfInstance.Unmarshal("outputs.arango", &arangoOutputs)
+	if err != nil || arangoOutputs == nil {
+		return fmt.Errorf("Error marshalling arango outputs: %v", err)
+	}
 	for name, arangoOutput := range arangoOutputs {
-		config.log.Infof("Validating arango output '%s'", name)
-		arangoOutput.Name = name
-		if err := config.validate.Struct(arangoOutput); err != nil {
+		err := config.validateArangoOutputConfig(name, arangoOutput)
+		if err != nil {
 			return err
 		}
-		config.outputs[name] = arangoOutput
-		config.log.Infof("Successfully validated arango output '%s'", name)
 	}
 	config.log.Infoln("Successfully validated all arango outputs")
 	return nil
 }
 
-func (config *DefaultConfig) validateKafkaOutputs() error {
-	var kafkaOutputs map[string]KafkaOutputConfig
-	if err := config.koanfInstance.Unmarshal("outputs.kafka", &kafkaOutputs); err != nil {
+func (config *DefaultConfig) validateKafkaOutputConfig(name string, kafkaOutput KafkaOutputConfig) error {
+	config.log.Infof("Validating kafka output '%s'", name)
+	kafkaOutput.Name = name
+	if err := config.validate.Struct(kafkaOutput); err != nil {
 		return err
 	}
+	config.outputs[name] = kafkaOutput
+	config.log.Infof("Successfully validated kafka output '%s'", name)
+	return nil
+}
+func (config *DefaultConfig) validateKafkaOutputs() error {
+	var kafkaOutputs map[string]KafkaOutputConfig
+	err := config.koanfInstance.Unmarshal("outputs.kafka", &kafkaOutputs)
+	if err != nil || kafkaOutputs == nil {
+		return fmt.Errorf("Error marshalling kafka outputs: %v", err)
+	}
 	for name, kafkaOutput := range kafkaOutputs {
-		config.log.Infof("Validating kafka output '%s'", name)
-		kafkaOutput.Name = name
-		if err := config.validate.Struct(kafkaOutput); err != nil {
+		err := config.validateKafkaOutputConfig(name, kafkaOutput)
+		if err != nil {
 			return err
 		}
-		config.outputs[name] = kafkaOutput
-		config.log.Infof("Successfully validated kafka output '%s'", name)
 	}
 	config.log.Infoln("Successfully validated all kafka outputs")
 	return nil
 }
 
 func (config *DefaultConfig) validateOutputs() error {
-	if config.koanfInstance.Get("outputs") == nil {
-		return fmt.Errorf("No outputs defined in config")
-	}
-	arangoDefined := config.koanfInstance.Get("outputs.arango") != nil
-	kafkaDefined := config.koanfInstance.Get("outputs.kafka") != nil
-	if !kafkaDefined && !arangoDefined {
+	arangoOutputDefined := config.koanfInstance.Get("outputs.arango") != nil
+	kafkaOutputDefined := config.koanfInstance.Get("outputs.kafka") != nil
+	if !kafkaOutputDefined && !arangoOutputDefined {
 		return fmt.Errorf("No valid outputs defined in config")
 	}
-	if arangoDefined {
+	if arangoOutputDefined {
 		if err := config.validateArangoOutputs(); err != nil {
 			return err
 		}
 	}
-	if kafkaDefined {
+	if kafkaOutputDefined {
 		if err := config.validateKafkaOutputs(); err != nil {
 			return err
 		}
@@ -185,8 +214,9 @@ func (config *DefaultConfig) validateTelemetryToArangoOutputs(outputs []string) 
 
 func (config *DefaultConfig) validateTelemetryToArango() error {
 	var telemetryToArango map[string]TelemetryToArangoProcessorConfig
-	if err := config.koanfInstance.Unmarshal("processors.TelemetryToArango", &telemetryToArango); err != nil {
-		return err
+	err := config.koanfInstance.Unmarshal("processors.TelemetryToArango", &telemetryToArango)
+	if err != nil || telemetryToArango == nil {
+		return fmt.Errorf("Error marshalling TelemetryToArango processors: %v", err)
 	}
 	for name, processor := range telemetryToArango {
 		processor.Name = name

@@ -1,0 +1,5 @@
+inputs:
+  kafka:
+    jalapeno-kafka-openconfig:
+      broker: "" # Missing broker
+      topic: hawkv6.openconfig

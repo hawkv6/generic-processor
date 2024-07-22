@@ -1,0 +1,8 @@
+outputs:
+  kafka:
+    jalapeno-kafka-lslink-events:
+      broker: # missing
+      topic: gobmp.parsed.ls_link_events
+      type: event-notification
+  
+

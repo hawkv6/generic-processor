@@ -14,7 +14,7 @@ type TelemetryToArangoProcessorConfig struct {
 	BaseProcessorConfig
 	Inputs        []string      `koanf:"inputs" validate:"required"`
 	Outputs       []string      `koanf:"outputs" validate:"required"`
-	Interval      uint          `koanf:"interval" validate:"required"`
+	Interval      uint          `koanf:"interval" validate:"required,min=1"`
 	Normalization Normalization `koanf:"normalization" validate:"required"`
 	Modes         []Mode        `koanf:"modes" validate:"required"`
 }

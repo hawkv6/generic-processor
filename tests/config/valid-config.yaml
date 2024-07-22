@@ -1,0 +1,155 @@
+inputs:
+  kafka:
+    jalapeno-kafka-openconfig:
+      broker: 10.8.39.68:9094
+      topic: hawkv6.openconfig
+  influx:
+    jalapeno-influx:
+      url: http://10.8.39.67:8086
+      db: mdt_db
+      username: jalapeno
+      password: jalapeno
+
+outputs:
+  arango:
+    jalapeno-arango:
+      url: https://arango-hawkv6.stud.network.garden/
+      database: jalapeno
+      username: root
+      password: jalapeno
+  kafka:
+    jalapeno-kafka-lslink-events:
+      broker: 10.8.39.68:9094
+      topic: gobmp.parsed.ls_link_events
+      type: event-notification
+    jalapeno-kafka-normalization-metrics:
+      broker: 10.8.39.68:9094
+      topic: hawkv6.telemetry.normalized
+      type: normalization
+
+
+processors:
+    TelemetryToArango:
+      LsLink:
+        inputs:
+          - jalapeno-kafka-openconfig
+          - jalapeno-influx
+        outputs: 
+          - jalapeno-arango
+          - jalapeno-kafka-lslink-events
+          - jalapeno-kafka-normalization-metrics
+        interval: 30 # seconds
+        normalization:
+          field-mappings:
+            unidir_link_delay : normalized_unidir_link_delay
+            unidir_delay_variation : normalized_unidir_delay_variation
+            unidir_packet_loss_percentage : normalized_unidir_packet_loss
+        modes:
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                field: delay_measurement_session/last_advertisement_information/advertised_values/average
+                method: median
+                group_by:
+                  - interface_name
+                  - source 
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: unidir_link_delay
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                field: delay_measurement_session/last_advertisement_information/advertised_values/minimum
+                method: min
+                group_by:
+                  - interface_name
+                  - source
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: unidir_link_delay_min_max[0]
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                field: delay_measurement_session/last_advertisement_information/advertised_values/maximum
+                method: max
+                group_by:
+                  - interface_name
+                  - source
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: unidir_link_delay_min_max[1]
+          - input-options:
+              jalapeno-influx:
+                measurement: performance-measurement
+                field: delay_measurement_session/last_advertisement_information/advertised_values/variance
+                method: mean
+                group_by:
+                  - interface_name
+                  - source
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: unidir_delay_variation
+          - input-options:
+              jalapeno-influx:
+                measurement: isis
+                field: interface_status_and_data/enabled/packet_loss_percentage 
+                method: max
+                group_by:
+                  - interface_name
+                  - source
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: unidir_packet_loss_percentage
+          - input-options:
+              jalapeno-influx:
+                measurement: isis
+                field: interface_status_and_data/enabled/bandwidth 
+                method: last
+                group_by:
+                  - interface_name
+                  - source
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: max_link_bw_kbps
+          - input-options:
+              jalapeno-influx:
+                measurement: utilization
+                field: out_octets
+                method: mean
+                transformation: 
+                  operation: non_negative_derivative
+                  period: 1 # seconds
+                group_by:
+                  - name
+                  - source
+            output-options:
+              jalapeno-arango:
+                collection: ls_link
+                method: update
+                filter_by:
+                  - local_link_ip
+                field: unidir_bw_utilization
