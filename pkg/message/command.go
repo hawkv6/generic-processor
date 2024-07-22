@@ -38,7 +38,7 @@ func NewArangoUpdateCommand(collection string) *ArangoUpdateCommand {
 type ArangoUpdate struct {
 	Tags   map[string]string
 	Fields []string
-	Values []float64 // TODO: Think about introduce map for Fields and Values
+	Values []float64
 }
 
 type KafkaEventCommand struct {

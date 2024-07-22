@@ -385,7 +385,6 @@ func (processor *TelemetryToArangoProcessor) processArangoResultMessages(kafkaOu
 		select {
 		case <-processor.quitChan:
 			return
-		// TODO add a new message type to publish data to kafka and then grab them by telegraf and send to influx
 		default:
 			for _, arangoResultChannel := range arangoResultChannels {
 				for msg := range arangoResultChannel {

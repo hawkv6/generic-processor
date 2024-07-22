@@ -95,6 +95,7 @@ type UpdateMessage struct {
 	NormalizedUnidirLinkDelay      float64 `json:"normalized_unidir_link_delay,omitempty"`
 	NormalizedUnidirDelayVariation float64 `json:"normalized_unidir_delay_variation,omitempty"`
 	NormalizedUnidirPacketLoss     float64 `json:"normalized_unidir_packet_loss,omitempty"`
+	UnidirPacketLossPercentage     float64 `json:"undir_packet_loss_percentage,omitempty"`
 }
 
 func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor driver.Cursor, command message.ArangoUpdateCommand, updateMessages []UpdateMessage, keys []string, i int) (int, error) {
@@ -114,7 +115,7 @@ func (output *ArangoOutput) processLsLinkDocument(ctx context.Context, cursor dr
 		"unidir_link_delay_min_max[0]":      &updateMessage.UnidirLinkDelayMinMax[0],
 		"unidir_link_delay_min_max[1]":      &updateMessage.UnidirLinkDelayMinMax[1],
 		"unidir_delay_variation":            &updateMessage.UnidirDelayVariation,
-		"unidir_packet_loss":                &updateMessage.UnidirPacketLoss,
+		"unidir_packet_loss_percentage":     &updateMessage.UnidirPacketLossPercentage,
 		"max_link_bw_kbps":                  &updateMessage.MaxLinkBWKbps,
 		"unidir_available_bw":               &updateMessage.UnidirAvailableBW,
 		"unidir_bw_utilization":             &updateMessage.UnidirBWUtilization,

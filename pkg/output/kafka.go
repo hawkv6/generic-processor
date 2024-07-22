@@ -98,7 +98,6 @@ func (output *KafkaOutput) Start() {
 	output.log.Debugln("Starting Kafka output: ", output.config.Name)
 	for {
 		select {
-		// TODO add a new command to publish dat to Kafka so that Telegraf can be used to send data to InfluxDB
 		case command := <-output.commandChan:
 			switch commandType := command.(type) {
 			case message.KafkaEventCommand:

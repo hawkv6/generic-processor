@@ -43,7 +43,7 @@ processors:
           field-mappings:
             unidir_link_delay : normalized_unidir_link_delay
             unidir_delay_variation : normalized_unidir_delay_variation
-            unidir_packet_loss : normalized_unidir_packet_loss
+            unidir_packet_loss_percentage : normalized_unidir_packet_loss
         modes:
           - input-options:
               jalapeno-influx:
@@ -119,7 +119,7 @@ processors:
                 method: update
                 filter_by:
                   - local_link_ip
-                field: unidir_packet_loss
+                field: unidir_packet_loss_percentage
           - input-options:
               jalapeno-influx:
                 measurement: isis
