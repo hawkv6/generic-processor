@@ -12,7 +12,7 @@ import (
 type InputManager interface {
 	InitInputs() error
 	GetInputResources(string) (*InputResource, error)
-	StartInputs() error
+	StartInputs()
 	StopInputs()
 }
 type DefaultInputManager struct {
@@ -84,7 +84,7 @@ func (manager *DefaultInputManager) GetInputResources(name string) (*InputResour
 	return &input, nil
 }
 
-func (manager *DefaultInputManager) StartInputs() error {
+func (manager *DefaultInputManager) StartInputs() {
 	manager.log.Infoln("Starting all inputs")
 	manager.wg.Add(len(manager.inputResources))
 	for _, input := range manager.inputResources {
@@ -93,7 +93,6 @@ func (manager *DefaultInputManager) StartInputs() error {
 			input.Input.Start()
 		}(input)
 	}
-	return nil
 }
 
 func (manager *DefaultInputManager) StopInputs() {

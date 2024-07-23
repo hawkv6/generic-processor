@@ -37,9 +37,7 @@ var startCmd = &cobra.Command{
 			log.Fatalf("error initializing processors: %v", err)
 		}
 
-		if err := inputManager.StartInputs(); err != nil {
-			log.Fatalf("error starting inputs: %v", err)
-		}
+		inputManager.StartInputs()
 
 		if err := outputManager.StartOutputs(); err != nil {
 			log.Fatalf("error starting outputs: %v", err)

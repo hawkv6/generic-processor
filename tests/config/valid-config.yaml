@@ -1,11 +1,11 @@
 inputs:
   kafka:
     jalapeno-kafka-openconfig:
-      broker: 10.8.39.68:9094
+      broker: localhost:9094
       topic: hawkv6.openconfig
   influx:
     jalapeno-influx:
-      url: http://10.8.39.67:8086
+      url: http://localhost:8086
       db: mdt_db
       username: jalapeno
       password: jalapeno
@@ -19,11 +19,11 @@ outputs:
       password: jalapeno
   kafka:
     jalapeno-kafka-lslink-events:
-      broker: 10.8.39.68:9094
+      broker: localhost:9094
       topic: gobmp.parsed.ls_link_events
       type: event-notification
     jalapeno-kafka-normalization-metrics:
-      broker: 10.8.39.68:9094
+      broker: localhost:9094
       topic: hawkv6.telemetry.normalized
       type: normalization
 
