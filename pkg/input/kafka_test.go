@@ -354,6 +354,38 @@ func TestKafkaInput_processMessage(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "TestKafkaInput_processMessage invalid oper-state message",
+			msg: &sarama.ConsumerMessage{
+				Headers: nil,
+				Key:     nil,
+				Value: []byte(`
+								{
+  								"fields": {
+    								"delete": false,
+    								"state/ip": "2001:db8::1",
+    								"state/origin": "static",
+    								"state/prefix_length": 64,
+    								"state/status": "preferred"
+  								},
+  								"name": "oper-state",
+  								"tags": {
+    								"host": "telegraf",
+    								"index": "1",
+    								"ip": "2001:db8::1",
+    								"name": "GigabitEthernet0/0/0/1",
+    								"node": "0/RP0/CPU0",
+    								"path": "Cisco-IOS-XR-ipv6-io-oper:ipv6-network/nodes/node/interface-data/vrfs/vrf/ipv6-network-interfaces/ipv6-network-interface",
+    								"source": "XR-1",
+    								"subscription": "hawkv6-openconfig"
+  								},
+  								"timestamp": 1704728135
+								}
+				`),
+				Topic: "test",
+			},
+			wantErr: true,
+		},
+		{
 			name: "TestKafkaInput_processMessage invalid JSON",
 			msg: &sarama.ConsumerMessage{
 				Headers: nil,
@@ -485,10 +517,24 @@ func TestKafkaInput_Start(t *testing.T) {
 
 func TestKafkaInput_Stop(t *testing.T) {
 	tests := []struct {
-		name string
+		name                 string
+		partitionConsumerErr bool
+		consumerErr          bool
 	}{
 		{
-			name: "TestKafkaInput_Stop",
+			name:                 "TestKafkaInput_Stop no error",
+			partitionConsumerErr: false,
+			consumerErr:          false,
+		},
+		{
+			name:                 "TestKafkaInput_Stop partition consumer error",
+			partitionConsumerErr: true,
+			consumerErr:          false,
+		},
+		{
+			name:                 "TestKafkaInput_Stop consumer error",
+			partitionConsumerErr: false,
+			consumerErr:          true,
 		},
 	}
 	for _, tt := range tests {
@@ -498,8 +544,20 @@ func TestKafkaInput_Stop(t *testing.T) {
 				Topic:  "test",
 			}
 			input := NewKafkaInput(config, make(chan message.Command), make(chan message.Result))
-			input.saramaConsumer = NewKafkaConsumerMock()
-			input.saramaPartitionConsumer = NewKafkaParitionConsumerMock()
+			kafkaConsumer := NewKafkaConsumerMock()
+			kafkaPartitionConsumer := NewKafkaParitionConsumerMock()
+			input.saramaConsumer = kafkaConsumer
+			input.saramaPartitionConsumer = kafkaPartitionConsumer
+			if tt.partitionConsumerErr {
+				kafkaPartitionConsumer.ReturnError = true
+			}
+			if tt.consumerErr {
+				kafkaConsumer.ReturnError = true
+			}
+			if tt.consumerErr || tt.partitionConsumerErr {
+				assert.Error(t, input.Stop())
+				return
+			}
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {

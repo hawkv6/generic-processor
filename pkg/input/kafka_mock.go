@@ -20,10 +20,13 @@ type KafkaConsumer interface {
 }
 
 type KafkaConsumerMock struct {
+	ReturnError bool
 }
 
 func NewKafkaConsumerMock() *KafkaConsumerMock {
-	return &KafkaConsumerMock{}
+	return &KafkaConsumerMock{
+		ReturnError: false,
+	}
 }
 
 func (consumer *KafkaConsumerMock) ConsumePartition(topic string, partition int32, offset int64) (sarama.PartitionConsumer, error) {
@@ -34,6 +37,9 @@ func (consumer *KafkaConsumerMock) ConsumePartition(topic string, partition int3
 	}
 }
 func (consumer *KafkaConsumerMock) Close() error {
+	if consumer.ReturnError {
+		return fmt.Errorf("Error closing partition consumer")
+	}
 	return nil
 }
 
@@ -59,16 +65,21 @@ type KafkaParitionConsumer interface {
 type KafkaParitionConsumerMock struct {
 	messageChan chan *sarama.ConsumerMessage
 	errChan     chan *sarama.ConsumerError
+	ReturnError bool
 }
 
 func NewKafkaParitionConsumerMock() *KafkaParitionConsumerMock {
 	return &KafkaParitionConsumerMock{
 		messageChan: make(chan *sarama.ConsumerMessage),
 		errChan:     make(chan *sarama.ConsumerError),
+		ReturnError: false,
 	}
 }
 
 func (partitionConsumer *KafkaParitionConsumerMock) Close() error {
+	if partitionConsumer.ReturnError {
+		return fmt.Errorf("Error closing partition consumer")
+	}
 	return nil
 }
 
