@@ -30,10 +30,11 @@ func TestNewDefaultInputManager(t *testing.T) {
 func TestDefaultInputManager_initInfluxInput(t *testing.T) {
 	tests := []struct {
 		name string
-	}{{
+	}{
+		{
 
-		name: "TestDefaultInputManager_initInfluxInput connection error ",
-	},
+			name: "TestDefaultInputManager_initInfluxInput connection error ",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,11 +76,10 @@ func TestDefaultInputManager_InitInputs(t *testing.T) {
 		name    string
 		wantErr bool
 	}{
-		// {
-
-		// 	name:    "TestDefaultInputManager_InitInputs empty config",
-		// 	wantErr: false,
-		// },
+		{
+			name:    "TestDefaultInputManager_InitInputs empty config",
+			wantErr: false,
+		},
 		{
 
 			name:    "TestDefaultInputManager_InitInputs connection error",
@@ -161,10 +161,16 @@ func TestDefaultInputManager_StartInputs(t *testing.T) {
 
 func TestDefaultInputManager_StopInputs(t *testing.T) {
 	tests := []struct {
-		name string
+		name    string
+		wantErr bool
 	}{
 		{
-			name: "TestDefaultInputManager_StopInputs success",
+			name:    "TestDefaultInputManager_StopInputs success",
+			wantErr: false,
+		},
+		{
+			name:    "TestDefaultInputManager_StopInputs error",
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -172,7 +178,11 @@ func TestDefaultInputManager_StopInputs(t *testing.T) {
 			config := config.NewDefaultConfig("../../tests/config/valid-config.yaml")
 			manager := NewDefaultInputManager(config)
 			input := NewMockInput(gomock.NewController(t))
-			input.EXPECT().Stop().Return(nil)
+			if tt.wantErr {
+				input.EXPECT().Stop().Return(assert.AnError)
+			} else {
+				input.EXPECT().Stop().Return(nil)
+			}
 			inputResource := NewInputResource()
 			inputResource.Input = input
 			manager.inputResources["test"] = inputResource
