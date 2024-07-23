@@ -26,10 +26,10 @@ type IPv6Message struct {
 
 type IPv6Fields struct {
 	Delete       bool   `mapstructure:"delete"`
-	IPv6         string `mapstructure:"state/ip"`
-	Origin       string `mapstructure:"state/origin"`
-	PrefixLength int    `mapstructure:"state/prefix_length"`
-	Status       string `mapstructure:"state/status"`
+	IPv6         string `mapstructure:"state/ip" validate:"required"`
+	Origin       string `mapstructure:"state/origin" validate:"required"`
+	PrefixLength int    `mapstructure:"state/prefix_length" validate:"required"`
+	Status       string `mapstructure:"state/status" validate:"required"`
 }
 
 type InterfaceStatusMessage struct {
@@ -38,19 +38,19 @@ type InterfaceStatusMessage struct {
 }
 
 type InterfaceStatusFields struct {
-	AdminStatus            string `mapstructure:"admin_status"`
-	CarrierTranstionsCount int    `mapstructure:"counters/carrier_transitions"`
-	CPU                    string `mapstructure:"cpu"`
-	Delete                 bool   `mapstructure:"delete"`
-	Description            string `mapstructure:"description"`
-	Enabled                string `mapstructure:"enabled"`
-	InterfaceIndex         int    `mapstructure:"ifindex"`
-	LastChange             int64  `mapstructure:"last_change"`
-	Logical                string `mapstructure:"logical"`
-	LoopbackMode           string `mapstructure:"loopback_mode"`
-	Management             string `mapstructure:"management"`
-	MTU                    int    `mapstructure:"mtu"`
-	Name                   string `mapstructure:"name"`
-	OperStatus             string `mapstructure:"oper_status"`
-	Type                   string `mapstructure:"type"`
+	AdminStatus             string `mapstructure:"admin_status" validate:"required"`
+	CarrierTransitionsCount int    `mapstructure:"counters/carrier_transitions" validate:"min=0"`
+	CPU                     string `mapstructure:"cpu" validate:"required"`
+	Delete                  bool   `mapstructure:"delete"`
+	Description             string `mapstructure:"description" validate:"required"`
+	Enabled                 string `mapstructure:"enabled" validate:"required"`
+	InterfaceIndex          int    `mapstructure:"ifindex" validate:"min=0"`
+	LastChange              int64  `mapstructure:"last_change" validate:"required"`
+	Logical                 string `mapstructure:"logical" validate:"required"`
+	LoopbackMode            string `mapstructure:"loopback_mode" validate:"required"`
+	Management              string `mapstructure:"management" validate:"required"`
+	MTU                     int    `mapstructure:"mtu" validate:"required"`
+	Name                    string `mapstructure:"name" validate:"required"`
+	OperStatus              string `mapstructure:"oper_status" validate:"required"`
+	Type                    string `mapstructure:"type" validate:"required"`
 }

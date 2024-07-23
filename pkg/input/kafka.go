@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/go-playground/validator/v10"
 	"github.com/hawkv6/generic-processor/pkg/config"
 	"github.com/hawkv6/generic-processor/pkg/logging"
 	"github.com/hawkv6/generic-processor/pkg/message"
@@ -20,8 +21,8 @@ type KafkaInput struct {
 	resultChan              chan message.Result
 	quitChan                chan struct{}
 	saramaConfig            *sarama.Config
-	saramaConsumer          sarama.Consumer
-	saramaPartitionConsumer sarama.PartitionConsumer
+	saramaConsumer          KafkaConsumer
+	saramaPartitionConsumer KafkaParitionConsumer
 	handlers                map[string]func(*message.TelemetryMessage) (message.Result, error)
 	wg                      sync.WaitGroup
 }
@@ -95,7 +96,9 @@ func (input *KafkaInput) UnmarshalTelemetryMessage(msg *sarama.ConsumerMessage) 
 func (input *KafkaInput) decodeIpv6Message(telemetryMessage *message.TelemetryMessage) (*message.IPv6Message, error) {
 	ipv6Fields := message.IPv6Fields{}
 	if err := mapstructure.Decode(telemetryMessage.Fields, &ipv6Fields); err != nil {
-		input.log.Debugln("Error decoding IPv6 fields: ", err)
+		return nil, err
+	}
+	if err := validator.New().Struct(ipv6Fields); err != nil {
 		return nil, err
 	}
 	ipv6Message := message.IPv6Message{
@@ -109,7 +112,9 @@ func (input *KafkaInput) decodeIpv6Message(telemetryMessage *message.TelemetryMe
 func (input *KafkaInput) decodeInterfaceStatusMessage(telemetryMessage *message.TelemetryMessage) (*message.InterfaceStatusMessage, error) {
 	intStatusFields := message.InterfaceStatusFields{}
 	if err := mapstructure.Decode(telemetryMessage.Fields, &intStatusFields); err != nil {
-		input.log.Debugln("Error decoding Interface Status fields: ", err)
+		return nil, err
+	}
+	if err := validator.New().Struct(intStatusFields); err != nil {
 		return nil, err
 	}
 	intStatusMsg := message.InterfaceStatusMessage{
