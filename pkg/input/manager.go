@@ -33,9 +33,12 @@ func NewDefaultInputManager(config config.Config) *DefaultInputManager {
 
 func (manager *DefaultInputManager) initInfluxInput(name string, configType config.InfluxInputConfig) error {
 	inputResource := NewInputResource()
-	input := NewInfluxInput(configType, inputResource.CommandChan, inputResource.ResultChan)
-	if err := input.Init(); err != nil {
+	input, err := NewInfluxInput(configType, inputResource.CommandChan, inputResource.ResultChan)
+	if err != nil {
 		return fmt.Errorf("error creating InfluxDB client: %v", err)
+	}
+	if err := input.Init(); err != nil {
+		return fmt.Errorf("error initializing InfluxDB client: %v", err)
 	}
 	inputResource.Input = input
 	manager.inputResources[name] = inputResource

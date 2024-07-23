@@ -3,6 +3,7 @@ package input
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/hawkv6/generic-processor/pkg/config"
@@ -18,20 +19,19 @@ type InfluxInput struct {
 	commandChan chan message.Command
 	resultChan  chan message.Result
 	quitChan    chan struct{}
-	client      client.Client
+	client      InfluxClient
+	wg          sync.WaitGroup
 }
 
-func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Command, resultChan chan message.Result) *InfluxInput {
-	return &InfluxInput{
+func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Command, resultChan chan message.Result) (*InfluxInput, error) {
+	input := &InfluxInput{
 		log:         logging.DefaultLogger.WithField("subsystem", Subsystem),
 		inputConfig: config,
 		commandChan: commandChan,
 		resultChan:  resultChan,
 		quitChan:    make(chan struct{}),
+		wg:          sync.WaitGroup{},
 	}
-}
-
-func (input *InfluxInput) Init() error {
 	client, err := client.NewHTTPClient(client.HTTPConfig{
 		Addr:     input.inputConfig.URL,
 		Username: input.inputConfig.Username,
@@ -39,15 +39,18 @@ func (input *InfluxInput) Init() error {
 		Timeout:  time.Duration(input.inputConfig.Timeout) * time.Second,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
+	input.client = client
+	return input, nil
+}
 
-	_, _, err = client.Ping(0)
+func (input *InfluxInput) Init() error {
+	_, _, err := input.client.Ping(time.Duration(input.inputConfig.Timeout))
 	if err != nil {
 		return fmt.Errorf("error connecting to InfluxDB: %s", input.inputConfig.URL)
 	}
 	input.log.Debugf("Successfully created InfluxDB client '%s': ", input.inputConfig.Name)
-	input.client = client
 	return nil
 }
 
@@ -61,10 +64,10 @@ func (input *InfluxInput) queryDB(query string) (res []client.Result, err error)
 			return res, response.Error()
 		}
 		res = response.Results
+		return res, nil
 	} else {
 		return res, err
 	}
-	return res, nil
 }
 
 func (input *InfluxInput) createQuery(command message.InfluxQueryCommand) string {
@@ -92,11 +95,30 @@ func (input *InfluxInput) castValue(value interface{}) (float64, error) {
 	if !ok {
 		return 0, fmt.Errorf("value is not a json.Number")
 	}
-	floatValue, err := jsonNumber.Float64()
-	if err != nil {
-		return 0, err
+	return jsonNumber.Float64()
+}
+
+func (input *InfluxInput) getResults(results []client.Result, command message.InfluxQueryCommand, resultMessage *message.InfluxResultMessage) {
+	for _, row := range results[0].Series {
+		for columnIndex, columnName := range row.Columns {
+			if columnName == command.Method || (command.Transformation != nil && command.Transformation.Operation == columnName) {
+				if len(row.Values) == 0 {
+					input.log.Errorf("No values returned from InfluxDB query")
+					return
+				}
+				valueToConvert := row.Values[0][columnIndex]
+				if value, err := input.castValue(valueToConvert); err != nil {
+					input.log.Errorf("Failed to cast value: %v, error: %v", valueToConvert, err)
+				} else {
+					result := message.InfluxResult{
+						Tags:  row.Tags,
+						Value: value,
+					}
+					resultMessage.Results = append(resultMessage.Results, result)
+				}
+			}
+		}
 	}
-	return floatValue, nil
 }
 
 func (input *InfluxInput) sendResults(results []client.Result, command message.InfluxQueryCommand) {
@@ -107,27 +129,8 @@ func (input *InfluxInput) sendResults(results []client.Result, command message.I
 		input.log.Errorf("No results returned from InfluxDB query")
 		return
 	}
-	input.log.Infof("Retrieved %d results from InfluxDB query", len(results[0].Series))
-	for _, row := range results[0].Series {
-		for columnIndex, columnName := range row.Columns {
-			if columnName == command.Method || (command.Transformation != nil && command.Transformation.Operation == columnName) {
-				if len(row.Values) == 0 {
-					input.log.Errorf("No values returned from InfluxDB query")
-					return
-				}
-				if value, err := input.castValue(row.Values[0][columnIndex]); err != nil {
-					input.log.Errorf("Failed to cast value: %v", err)
-				} else {
-
-					result := message.InfluxResult{
-						Tags:  row.Tags,
-						Value: value,
-					}
-					resultMessage.Results = append(resultMessage.Results, result)
-				}
-			}
-		}
-	}
+	input.log.Infof("Retrieved %d results rows from InfluxDB query", len(results[0].Series))
+	input.getResults(results, command, &resultMessage)
 	input.resultChan <- resultMessage
 }
 
@@ -139,12 +142,8 @@ func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
 		input.log.Errorf("Error executing InfluxDB query: %v", err)
 		return
 	}
-	if len(result) == 0 {
-		input.log.Errorf("No results returned from InfluxDB query")
-		return
-	}
-	if len(result[0].Series) == 0 {
-		input.log.Errorf("No series returned from InfluxDB query")
+	if len(result) == 0 || result[0].Series == nil {
+		input.log.Errorf("No results or series returned from InfluxDB query")
 		return
 	}
 	input.sendResults(result, command)
@@ -152,6 +151,7 @@ func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
 
 func (input *InfluxInput) Start() {
 	input.log.Infof("Starting InfluxDB input '%s'", input.inputConfig.Name)
+	input.wg.Add(1)
 	for {
 		select {
 		case msg := <-input.commandChan:
@@ -163,6 +163,7 @@ func (input *InfluxInput) Start() {
 			}
 		case <-input.quitChan:
 			input.log.Infof("Stopping InfluxDB input '%s'", input.inputConfig.Name)
+			input.wg.Done()
 			return
 		}
 	}
@@ -170,5 +171,9 @@ func (input *InfluxInput) Start() {
 
 func (input *InfluxInput) Stop() error {
 	close(input.quitChan)
+	input.wg.Wait()
+	if err := input.client.Close(); err != nil {
+		return err
+	}
 	return nil
 }
