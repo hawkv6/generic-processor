@@ -3,7 +3,6 @@ package input
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/hawkv6/generic-processor/pkg/config"
@@ -20,7 +19,6 @@ type InfluxInput struct {
 	resultChan  chan message.Result
 	quitChan    chan struct{}
 	client      InfluxClient
-	wg          sync.WaitGroup
 }
 
 func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Command, resultChan chan message.Result) (*InfluxInput, error) {
@@ -30,7 +28,6 @@ func NewInfluxInput(config config.InfluxInputConfig, commandChan chan message.Co
 		commandChan: commandChan,
 		resultChan:  resultChan,
 		quitChan:    make(chan struct{}),
-		wg:          sync.WaitGroup{},
 	}
 	client, err := client.NewHTTPClient(client.HTTPConfig{
 		Addr:     input.inputConfig.URL,
@@ -151,7 +148,6 @@ func (input *InfluxInput) executeCommand(command message.InfluxQueryCommand) {
 
 func (input *InfluxInput) Start() {
 	input.log.Infof("Starting InfluxDB input '%s'", input.inputConfig.Name)
-	input.wg.Add(1)
 	for {
 		select {
 		case msg := <-input.commandChan:
@@ -163,7 +159,6 @@ func (input *InfluxInput) Start() {
 			}
 		case <-input.quitChan:
 			input.log.Infof("Stopping InfluxDB input '%s'", input.inputConfig.Name)
-			input.wg.Done()
 			return
 		}
 	}
@@ -171,7 +166,6 @@ func (input *InfluxInput) Start() {
 
 func (input *InfluxInput) Stop() error {
 	close(input.quitChan)
-	input.wg.Wait()
 	if err := input.client.Close(); err != nil {
 		return err
 	}

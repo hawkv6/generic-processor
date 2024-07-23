@@ -400,6 +400,7 @@ func TestInfluxInput_sendResults(t *testing.T) {
 				Interval:    10,
 				GroupBy:     []string{"interface_name", "source"},
 			},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -543,7 +544,6 @@ func TestInfluxInput_Start(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 				input.commandChan <- tt.command
 				close(input.quitChan)
-				input.wg.Wait()
 				return
 			}
 			wg := sync.WaitGroup{}
@@ -559,7 +559,6 @@ func TestInfluxInput_Start(t *testing.T) {
 			input.commandChan <- tt.command
 			wg.Wait()
 			close(input.quitChan)
-			input.wg.Wait()
 		})
 	}
 }
@@ -589,7 +588,6 @@ func TestInfluxInput_Stop(t *testing.T) {
 			}()
 			time.Sleep(100 * time.Millisecond)
 			assert.NoError(t, input.Stop())
-			input.wg.Wait()
 		})
 	}
 }
