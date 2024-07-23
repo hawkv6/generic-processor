@@ -34,8 +34,13 @@ func TestDefaultConfig_Read(t *testing.T) {
 			wantErr:        false,
 		},
 		{
-			name:           "TestDefaultConfig_Read emptry file location",
+			name:           "TestDefaultConfig_Read empty file location",
 			configLocation: "",
+			wantErr:        true,
+		},
+		{
+			name:           "TestDefaultConfig_Read json file",
+			configLocation: "../../tests/config/invalid-config.json",
 			wantErr:        true,
 		},
 	}
