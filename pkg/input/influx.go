@@ -166,8 +166,5 @@ func (input *InfluxInput) Start() {
 
 func (input *InfluxInput) Stop() error {
 	close(input.quitChan)
-	if err := input.client.Close(); err != nil {
-		return err
-	}
-	return nil
+	return input.client.Close()
 }
