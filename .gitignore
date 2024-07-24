@@ -10,6 +10,7 @@
 
 # built binary
 bin
+!build
 
 # Test binary, built with `go test -c`
 *.test
@@ -25,9 +26,6 @@ go.work
 
 #VSCode
 .vscode
-
-# Binaries
-bin
 
 # Debug
 __debug*
