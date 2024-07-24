@@ -38,11 +38,7 @@ var startCmd = &cobra.Command{
 		}
 
 		inputManager.StartInputs()
-
-		if err := outputManager.StartOutputs(); err != nil {
-			log.Fatalf("error starting outputs: %v", err)
-		}
-
+		outputManager.StartOutputs()
 		processorManager.StartProcessors()
 
 		signalChan := make(chan os.Signal, 1)

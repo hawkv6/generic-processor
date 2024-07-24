@@ -12,7 +12,7 @@ import (
 type OutputManager interface {
 	InitOutputs() error
 	GetOutputResource(string) (*OutputResource, error)
-	StartOutputs() error
+	StartOutputs()
 	StopOutputs()
 }
 
@@ -83,7 +83,7 @@ func (manager *DefaultOutputManager) GetOutputResource(name string) (*OutputReso
 	return &output, nil
 }
 
-func (manager *DefaultOutputManager) StartOutputs() error {
+func (manager *DefaultOutputManager) StartOutputs() {
 	manager.log.Infoln("Starting all outputs")
 	manager.wg.Add(len(manager.outputResources))
 	for _, output := range manager.outputResources {
@@ -92,7 +92,6 @@ func (manager *DefaultOutputManager) StartOutputs() error {
 			output.Output.Start()
 		}(output)
 	}
-	return nil
 }
 
 func (manager *DefaultOutputManager) StopOutputs() {
