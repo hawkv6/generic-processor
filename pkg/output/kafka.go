@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -14,13 +15,13 @@ import (
 )
 
 type KafkaOutput struct {
-	log          *logrus.Entry
-	config       config.KafkaOutputConfig
-	saramaConfig *sarama.Config
-	producer     sarama.AsyncProducer
-	commandChan  chan message.Command
-	resultChan   chan message.Result
-	quitChan     chan struct{}
+	log         *logrus.Entry
+	config      config.KafkaOutputConfig
+	kafkaConfig *sarama.Config
+	producer    KafkaProducer
+	commandChan chan message.Command
+	resultChan  chan message.Result
+	quitChan    chan struct{}
 }
 
 func NewKafkaOutput(config config.KafkaOutputConfig, commandChan chan message.Command, resultChan chan message.Result) *KafkaOutput {
@@ -34,16 +35,15 @@ func NewKafkaOutput(config config.KafkaOutputConfig, commandChan chan message.Co
 }
 
 func (output *KafkaOutput) createConfig() {
-	output.saramaConfig = sarama.NewConfig()
-	output.saramaConfig.Net.DialTimeout = time.Second * 5
+	output.kafkaConfig = sarama.NewConfig()
+	output.kafkaConfig.Net.DialTimeout = time.Second * 5
 }
 
 func (output *KafkaOutput) Init() error {
 	output.createConfig()
-	producer, err := sarama.NewAsyncProducer([]string{output.config.Broker}, output.saramaConfig)
+	producer, err := sarama.NewAsyncProducer([]string{output.config.Broker}, output.kafkaConfig)
 	if err != nil {
-		output.log.Debugln("Error creating producer: ", err)
-		return err
+		return fmt.Errorf("Error creating producer: %v ", err)
 	}
 	output.producer = producer
 	return nil
@@ -55,25 +55,24 @@ func (output *KafkaOutput) publishMessage(msg message.KafkaEventMessage) {
 		output.log.Errorf("Error marshalling message: %v", err)
 		return
 	}
-	select {
-	case output.producer.Input() <- &sarama.ProducerMessage{Topic: output.config.Topic, Key: nil, Value: sarama.StringEncoder(jsonMsg)}:
-	case err := <-output.producer.Errors():
-		output.log.Errorln("Failed to produce message", err)
-	}
+	output.producer.Input() <- &sarama.ProducerMessage{Topic: output.config.Topic, Key: nil, Value: sarama.StringEncoder(jsonMsg)}
 }
 
-func (output *KafkaOutput) publishNotificationMessage(msg message.KafkaNormalizationMessage) {
-	var enc lineprotocol.Encoder
-	enc.SetPrecision(lineprotocol.Nanosecond)
-	enc.StartLine(msg.Measurement)
-
-	var keys []string
+func (*KafkaOutput) sortTags(msg message.KafkaNormalizationMessage) []string {
+	keys := make([]string, 0, len(msg.Tags))
 	for key := range msg.Tags {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	return keys
+}
 
-	for _, key := range keys {
+func (output *KafkaOutput) encodeToInfluxLineProtocol(msg message.KafkaNormalizationMessage) (lineprotocol.Encoder, bool) {
+	var enc lineprotocol.Encoder
+	enc.SetPrecision(lineprotocol.Nanosecond)
+	enc.StartLine(msg.Measurement)
+
+	for _, key := range output.sortTags(msg) {
 		enc.AddTag(key, msg.Tags[key])
 	}
 
@@ -83,15 +82,35 @@ func (output *KafkaOutput) publishNotificationMessage(msg message.KafkaNormaliza
 	enc.EndLine(time.Now())
 	if err := enc.Err(); err != nil {
 		output.log.Errorln("Error encoding line protocol: ", err)
+		return lineprotocol.Encoder{}, true
+	}
+	return enc, false
+}
+
+func (output *KafkaOutput) publishNotificationMessage(msg message.KafkaNormalizationMessage) {
+	enc, shouldReturn := output.encodeToInfluxLineProtocol(msg)
+	if shouldReturn {
 		return
 	}
+	output.producer.Input() <- &sarama.ProducerMessage{Topic: output.config.Topic, Key: nil, Value: sarama.ByteEncoder(enc.Bytes())}
+}
 
-	select {
-	case output.producer.Input() <- &sarama.ProducerMessage{Topic: output.config.Topic, Key: nil, Value: sarama.ByteEncoder(enc.Bytes())}:
-	case err := <-output.producer.Errors():
-		output.log.Errorln("Failed to produce message", err)
+func (output *KafkaOutput) publishEventNotifications(commandType message.KafkaEventCommand) {
+	if output.config.Type == "event-notification" {
+		output.log.Infof("Publish %d event messages to Kafka\n", len(commandType.Updates))
+		for _, msg := range commandType.Updates {
+			output.publishMessage(msg)
+		}
 	}
+}
 
+func (output *KafkaOutput) publishNormalizationMessages(commandType message.KafkaNormalizationCommand) {
+	if output.config.Type == "normalization" {
+		output.log.Infof("Publish %d normalization messages to Kafka\n", len(commandType.Updates))
+		for _, msg := range commandType.Updates {
+			output.publishNotificationMessage(msg)
+		}
+	}
 }
 
 func (output *KafkaOutput) Start() {
@@ -101,22 +120,14 @@ func (output *KafkaOutput) Start() {
 		case command := <-output.commandChan:
 			switch commandType := command.(type) {
 			case message.KafkaEventCommand:
-				if output.config.Type == "event-notification" {
-					output.log.Infof("Publish %d event messages to Kafka\n", len(commandType.Updates))
-					for _, msg := range commandType.Updates {
-						output.publishMessage(msg)
-					}
-				}
+				output.publishEventNotifications(commandType)
 			case message.KafkaNormalizationCommand:
-				if output.config.Type == "normalization" {
-					output.log.Infof("Publish %d normalization messages to Kafka\n", len(commandType.Updates))
-					for _, msg := range commandType.Updates {
-						output.publishNotificationMessage(msg)
-					}
-				}
+				output.publishNormalizationMessages(commandType)
 			default:
 				output.log.Errorf("Unsupported command type: %v", commandType)
 			}
+		case err := <-output.producer.Errors():
+			output.log.Errorln("Failed to produce message", err)
 		case <-output.quitChan:
 			return
 		}

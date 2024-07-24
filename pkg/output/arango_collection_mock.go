@@ -89,6 +89,7 @@ func (collection *ArangoCollectionMock) DocumentExists(ctx context.Context, key 
 	return false, nil
 }
 
+// nolint // This method is not used anyway
 func (collection *ArangoCollectionMock) EnsureFullTextIndex(ctx context.Context, fields []string, options *driver.EnsureFullTextIndexOptions) (driver.Index, bool, error) {
 	return nil, false, nil
 }

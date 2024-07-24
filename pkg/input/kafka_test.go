@@ -76,7 +76,7 @@ func TestKafkaInput_createConfig(t *testing.T) {
 			}
 			input := NewKafkaInput(config, make(chan message.Command), make(chan message.Result))
 			input.createConfig()
-			assert.NotNil(t, input.saramaConfig)
+			assert.NotNil(t, input.kafkaConfig)
 		})
 	}
 }
@@ -125,7 +125,7 @@ func TestKafkaInput_createParitionConsumer(t *testing.T) {
 				Topic:  tt.topic,
 			}
 			input := NewKafkaInput(config, make(chan message.Command), make(chan message.Result))
-			input.saramaConsumer = NewKafkaConsumerMock()
+			input.consumer = NewKafkaConsumerMock()
 			if tt.wantErr {
 				assert.Error(t, input.createParitionConsumer())
 				return
@@ -465,7 +465,7 @@ func TestKafkaInput_StartListening(t *testing.T) {
 			}
 			input := NewKafkaInput(config, make(chan message.Command), make(chan message.Result))
 			partitionConsumer := NewKafkaParitionConsumerMock()
-			input.saramaPartitionConsumer = partitionConsumer
+			input.partitionConsumer = partitionConsumer
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
@@ -501,7 +501,7 @@ func TestKafkaInput_Start(t *testing.T) {
 			}
 			input := NewKafkaInput(config, make(chan message.Command), make(chan message.Result))
 			partitionConsumer := NewKafkaParitionConsumerMock()
-			input.saramaPartitionConsumer = partitionConsumer
+			input.partitionConsumer = partitionConsumer
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
@@ -546,8 +546,8 @@ func TestKafkaInput_Stop(t *testing.T) {
 			input := NewKafkaInput(config, make(chan message.Command), make(chan message.Result))
 			kafkaConsumer := NewKafkaConsumerMock()
 			kafkaPartitionConsumer := NewKafkaParitionConsumerMock()
-			input.saramaConsumer = kafkaConsumer
-			input.saramaPartitionConsumer = kafkaPartitionConsumer
+			input.consumer = kafkaConsumer
+			input.partitionConsumer = kafkaPartitionConsumer
 			if tt.partitionConsumerErr {
 				kafkaPartitionConsumer.ReturnError = true
 			}

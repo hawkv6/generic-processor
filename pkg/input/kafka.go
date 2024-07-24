@@ -15,16 +15,16 @@ import (
 )
 
 type KafkaInput struct {
-	log                     *logrus.Entry
-	inputConfig             config.KafkaInputConfig
-	commandChan             chan message.Command
-	resultChan              chan message.Result
-	quitChan                chan struct{}
-	saramaConfig            *sarama.Config
-	saramaConsumer          KafkaConsumer
-	saramaPartitionConsumer KafkaParitionConsumer
-	handlers                map[string]func(*message.TelemetryMessage) (message.Result, error)
-	wg                      sync.WaitGroup
+	log               *logrus.Entry
+	inputConfig       config.KafkaInputConfig
+	commandChan       chan message.Command
+	resultChan        chan message.Result
+	quitChan          chan struct{}
+	kafkaConfig       *sarama.Config
+	consumer          KafkaConsumer
+	partitionConsumer KafkaParitionConsumer
+	handlers          map[string]func(*message.TelemetryMessage) (message.Result, error)
+	wg                sync.WaitGroup
 }
 
 func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Command, resultChan chan message.Result) *KafkaInput {
@@ -47,28 +47,28 @@ func NewKafkaInput(config config.KafkaInputConfig, commandChan chan message.Comm
 	return input
 }
 func (input *KafkaInput) createConfig() {
-	input.saramaConfig = sarama.NewConfig()
-	input.saramaConfig.Net.DialTimeout = time.Second * 5
+	input.kafkaConfig = sarama.NewConfig()
+	input.kafkaConfig.Net.DialTimeout = time.Second * 5
 }
 
 func (input *KafkaInput) createConsumer() error {
 	input.createConfig()
-	saramaConsumer, err := sarama.NewConsumer([]string{input.inputConfig.Broker}, input.saramaConfig)
+	saramaConsumer, err := sarama.NewConsumer([]string{input.inputConfig.Broker}, input.kafkaConfig)
 	if err != nil {
 		input.log.Debugln("Error creating consumer: ", err)
 		return err
 	}
 	input.log.Debugln("Successfully created Kafka consumer for broker: ", input.inputConfig.Broker)
-	input.saramaConsumer = saramaConsumer
+	input.consumer = saramaConsumer
 	return nil
 }
 func (input *KafkaInput) createParitionConsumer() error {
-	partitionConsumer, err := input.saramaConsumer.ConsumePartition(input.inputConfig.Topic, 0, sarama.OffsetOldest)
+	partitionConsumer, err := input.consumer.ConsumePartition(input.inputConfig.Topic, 0, sarama.OffsetOldest)
 	if err != nil {
 		input.log.Debugln("Error partition consumer: ", err)
 		return err
 	}
-	input.saramaPartitionConsumer = partitionConsumer
+	input.partitionConsumer = partitionConsumer
 	input.log.Debugln("Successfully created Kafka partition consumer for topic: ", input.inputConfig.Topic)
 	return nil
 }
@@ -147,7 +147,7 @@ func (input *KafkaInput) processMessage(msg *sarama.ConsumerMessage) {
 func (input *KafkaInput) StartListening() {
 	for {
 		select {
-		case msg := <-input.saramaPartitionConsumer.Messages():
+		case msg := <-input.partitionConsumer.Messages():
 			input.processMessage(msg)
 		case <-input.quitChan:
 			input.log.Infof("Stopping Kafka input '%s'", input.inputConfig.Name)
@@ -168,11 +168,11 @@ func (input *KafkaInput) Start() {
 
 func (input *KafkaInput) Stop() error {
 	close(input.quitChan)
-	if err := input.saramaPartitionConsumer.Close(); err != nil {
+	if err := input.partitionConsumer.Close(); err != nil {
 		input.log.Errorln("Error closing partition consumer: ", err)
 		return err
 	}
-	if err := input.saramaConsumer.Close(); err != nil {
+	if err := input.consumer.Close(); err != nil {
 		input.log.Errorln("Error closing consumer: ", err)
 		return err
 	}
