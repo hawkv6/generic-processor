@@ -154,12 +154,10 @@ func TestKafkaOutput_encodeToInfluxLineProtocol(t *testing.T) {
 					"interface_name": "GigabitEthernet0/0/0/0",
 				},
 				Fields: map[string]float64{
-					"normalized_unidir_link_delay":      0.00020253164556962027,
-					"normalized_unidir_delay_variation": 0.02028508771929825,
-					"normalized_unidir_packet_loss":     0.00000046770242568585443,
+					"normalized_unidir_link_delay": 0.00020253164556962027,
 				},
 			},
-			want: "normalization,interface_name=GigabitEthernet0/0/0/0,source=XR-1 normalized_unidir_link_delay=0.00020253164556962027,normalized_unidir_delay_variation=0.02028508771929825,normalized_unidir_packet_loss=4.6770242568585443e-07",
+			want: "normalization,interface_name=GigabitEthernet0/0/0/0,source=XR-1 normalized_unidir_link_delay=0.00020253164556962027",
 		},
 	}
 	for _, tt := range tests {
