@@ -9,14 +9,6 @@ import (
 	"github.com/influxdata/influxdb/models"
 )
 
-type InfluxClient interface {
-	Ping(timeout time.Duration) (time.Duration, string, error)
-
-	Query(q client.Query) (*client.Response, error)
-
-	Close() error
-}
-
 type InfluxClientMock struct {
 }
 

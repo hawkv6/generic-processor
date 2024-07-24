@@ -552,7 +552,7 @@ func TestKafkaInput_Stop(t *testing.T) {
 				kafkaPartitionConsumer.ReturnError = true
 			}
 			if tt.consumerErr {
-				kafkaConsumer.ReturnError = true
+				kafkaConsumer.returnError = true
 			}
 			if tt.consumerErr || tt.partitionConsumerErr {
 				assert.Error(t, input.Stop())
