@@ -42,21 +42,33 @@ func (processor *KafkaOpenConfigProcessor) processIpv6Message(msg *message.IPv6M
 	}
 }
 
+func (processor *KafkaOpenConfigProcessor) handleInterfaceUp(msg *message.InterfaceStatusMessage) {
+	processor.log.Debugf("Interface '%s' from router '%s' changed to UP", msg.Tags.InterfaceName, msg.Tags.Source)
+	if _, ok := processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
+		if ipv6Address, ok := processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; ok {
+			processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = ipv6Address
+			delete(processor.deactivatedIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
+		}
+	}
+}
+
+func (processor *KafkaOpenConfigProcessor) handleInterfaceDown(msg *message.InterfaceStatusMessage) {
+	processor.log.Debugf("Interface '%s' from router '%s' changed to DOWN", msg.Tags.InterfaceName, msg.Tags.Source)
+	if _, ok := processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
+		if ipv6Address, ok := processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; ok {
+			processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = ipv6Address
+			delete(processor.activeIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
+		}
+	}
+}
+
 func (processor *KafkaOpenConfigProcessor) processInterfaceStatusMessage(msg *message.InterfaceStatusMessage) {
 	processor.log.Debugf("Processing Interface Status message: %s %s", msg.Tags.Source, msg.Tags.InterfaceName)
 	if strings.Contains(msg.Tags.InterfaceName, "Ethernet") {
 		if msg.Fields.AdminStatus == "UP" {
-			processor.log.Debugf("Interface '%s' from router '%s' changed to UP", msg.Tags.InterfaceName, msg.Tags.Source)
-			if _, ok := processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
-				processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
-				delete(processor.deactivatedIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
-			}
+			processor.handleInterfaceUp(msg)
 		} else {
-			processor.log.Debugf("Interface '%s' from router '%s' changed to DOWN", msg.Tags.InterfaceName, msg.Tags.Source)
-			if _, ok := processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]; !ok {
-				processor.deactivatedIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName] = processor.activeIpv6Addresses[msg.Tags.Source+msg.Tags.InterfaceName]
-				delete(processor.activeIpv6Addresses, msg.Tags.Source+msg.Tags.InterfaceName)
-			}
+			processor.handleInterfaceDown(msg)
 		}
 	}
 }
@@ -86,14 +98,14 @@ func (processor *KafkaOpenConfigProcessor) Start(name string, commandChan chan m
 func (processor *KafkaOpenConfigProcessor) GetLocalLinkIp(tags map[string]string) (string, error) {
 	sourceTag, ok := tags["source"]
 	if !ok {
-		return "", fmt.Errorf("Received unknown source tag: %v", sourceTag)
+		return "", fmt.Errorf("Received message without 'source' tag: %v", tags)
 	}
-	ipv6Address := ""
+	var ipv6Address string
 	for key, value := range tags {
 		if key != "source" {
-			ipv6Address := processor.activeIpv6Addresses[sourceTag+value]
+			ipv6Address = processor.activeIpv6Addresses[sourceTag+value]
 			if ipv6Address != "" {
-				return ipv6Address, nil
+				break
 			}
 		}
 	}
