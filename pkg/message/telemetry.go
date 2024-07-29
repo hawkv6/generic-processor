@@ -1,7 +1,7 @@
 package message
 
 type TelemetryMessage struct {
-	BaseResultmessage
+	BaseResultMessage
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 	Name      string                 `json:"name,omitempty"`
 	Tags      MessageTags            `json:"tags,omitempty"`

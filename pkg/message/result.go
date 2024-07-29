@@ -5,12 +5,12 @@ import (
 )
 
 type Result interface{ isResult() }
-type BaseResultmessage struct{}
+type BaseResultMessage struct{}
 
-func (BaseResultmessage) isResult() {}
+func (BaseResultMessage) isResult() {}
 
 type InfluxResultMessage struct {
-	BaseResultmessage
+	BaseResultMessage
 	OutputOptions map[string]config.OutputOption
 	Results       []InfluxResult
 }
@@ -21,7 +21,7 @@ type InfluxResult struct {
 }
 
 type ArangoEventNotificationMessage struct {
-	BaseResultmessage
+	BaseResultMessage
 	EventMessages []EventMessage
 	Action        string
 }
@@ -32,7 +32,7 @@ type EventMessage struct {
 }
 
 type ArangoNormalizationMessage struct {
-	BaseResultmessage
+	BaseResultMessage
 	Measurement           string
 	NormalizationMessages []NormalizationMessage
 }

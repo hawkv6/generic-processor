@@ -235,7 +235,7 @@ func TestKafkaOpenConfigProcessor_Start(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			resultChan <- statusMessage
 			time.Sleep(100 * time.Millisecond)
-			resultChan <- &message.BaseResultmessage{} // trigger default case
+			resultChan <- &message.BaseResultMessage{} // trigger default case
 			time.Sleep(100 * time.Millisecond)
 			close(processor.quitChan)
 			wg.Wait()

@@ -41,6 +41,14 @@ type ArangoUpdate struct {
 	Values []float64
 }
 
+func NewArangoUpdate(tags map[string]string) ArangoUpdate {
+	return ArangoUpdate{
+		Tags:   tags,
+		Fields: make([]string, 0),
+		Values: make([]float64, 0),
+	}
+}
+
 type KafkaEventCommand struct {
 	BaseCommand
 	Updates []KafkaEventMessage
