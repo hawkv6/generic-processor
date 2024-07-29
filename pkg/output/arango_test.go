@@ -34,6 +34,37 @@ func TestNewArangoOutput(t *testing.T) {
 	}
 }
 
+func TestArangoOutput_getHttpConnection(t *testing.T) {
+	tests := []struct {
+		name                string
+		skipTlsVerification bool
+	}{
+		{
+			name:                "TestArangoOutput_getHttpConnection",
+			skipTlsVerification: false,
+		},
+		{
+			name:                "TestArangoOutput_getHttpConnection skipTlsVerification",
+			skipTlsVerification: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := config.ArangoOutputConfig{
+				URL:                 "http://arango:8528",
+				DB:                  "test",
+				Username:            "root",
+				Password:            "password",
+				SkipTlsVerification: tt.skipTlsVerification,
+			}
+			output := NewArangoOutput(config, make(chan message.Command), make(chan message.Result))
+			client, err := output.getHttpConnection()
+			assert.NotNil(t, client)
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestArangoOutput_createNewClient(t *testing.T) {
 	tests := []struct {
 		name string

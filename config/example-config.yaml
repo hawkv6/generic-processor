@@ -17,6 +17,7 @@ outputs:
       database: jalapeno
       username: root
       password: jalapeno
+      skip_tls_verification: true
   kafka:
     jalapeno-kafka-lslink-events:
       broker: 10.8.39.68:9094

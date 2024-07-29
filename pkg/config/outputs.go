@@ -12,10 +12,11 @@ func (BaseOutputConfig) IsOutput() {}
 
 type ArangoOutputConfig struct {
 	BaseOutputConfig
-	URL      string `koanf:"url" validate:"required,url"`
-	DB       string `koanf:"database" validate:"required"`
-	Username string `koanf:"username" validate:"required"`
-	Password string `koanf:"password" validate:"required"`
+	URL                 string `koanf:"url" validate:"required,url"`
+	DB                  string `koanf:"database" validate:"required"`
+	Username            string `koanf:"username" validate:"required"`
+	Password            string `koanf:"password" validate:"required"`
+	SkipTlsVerification bool   `koanf:"skip_tls_verification"`
 }
 
 type KafkaOutputConfig struct {

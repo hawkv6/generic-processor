@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 
 	"github.com/arangodb/go-driver"
@@ -31,10 +32,22 @@ func NewArangoOutput(config config.ArangoOutputConfig, commandChan chan message.
 	}
 }
 
-func (output *ArangoOutput) createNewClient() error {
-	connection, err := http.NewConnection(http.ConnectionConfig{
+func (output *ArangoOutput) getHttpConnection() (driver.Connection, error) {
+	if output.config.SkipTlsVerification {
+		return http.NewConnection(http.ConnectionConfig{
+			Endpoints: []string{output.config.URL},
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		})
+	}
+	return http.NewConnection(http.ConnectionConfig{
 		Endpoints: []string{output.config.URL},
 	})
+}
+
+func (output *ArangoOutput) createNewClient() error {
+	connection, err := output.getHttpConnection()
 	if err != nil {
 		return fmt.Errorf("error creating ArangoDB connection: %v", err)
 	}
