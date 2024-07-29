@@ -536,17 +536,20 @@ func TestInfluxInput_Start(t *testing.T) {
 			input, err := NewInfluxInput(config, make(chan message.Command), make(chan message.Result))
 			assert.NoError(t, err)
 			input.client = NewInfluxClientMock()
+			wg := sync.WaitGroup{}
 			if tt.wantErr {
+				wg.Add(1)
 				go func() {
 					input.Start()
 					t.Log("Received result")
+					wg.Done()
 				}()
 				time.Sleep(100 * time.Millisecond)
 				input.commandChan <- tt.command
 				close(input.quitChan)
+				wg.Wait()
 				return
 			}
-			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				<-input.resultChan

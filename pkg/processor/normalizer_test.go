@@ -289,7 +289,7 @@ func TestMinMaxNormalizer_NormalizeValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			normalizer := NewMinMaxNormalizer()
-			if tt.wantErr {
+			if tt.wantErr && tt.inputField != "" {
 				normalizer.AddDataToNormalize(tt.inputField, 0)
 			} else if tt.inputField != "" {
 				for _, value := range []float64{5.0, 10.0, 15.0, 20.0, 25.0} {
