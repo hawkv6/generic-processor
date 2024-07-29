@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/hawkv6/generic-processor/pkg/config"
@@ -35,14 +34,6 @@ func NewDefaultProcessorManager(config config.Config, inputManager input.InputMa
 		processors:    make(map[string]Processor),
 		wg:            sync.WaitGroup{},
 	}
-}
-
-func (manager *DefaultProcessorManager) initTelemetryToArangoProcessor(config config.TelemetryToArangoProcessorConfig, inputResources map[string]input.InputResource, outputResources map[string]output.OutputResource) (*TelemetryToArangoProcessor, error) {
-	processor := NewTelemetryToArangoProcessor(config, inputResources, outputResources)
-	if err := processor.Init(); err != nil {
-		return nil, err
-	}
-	return processor, nil
 }
 
 func (manager *DefaultProcessorManager) getInputResources() (map[string]input.InputResource, error) {
@@ -81,13 +72,8 @@ func (manager *DefaultProcessorManager) Init() error {
 		}
 		switch processorConfigType := processorConfig.(type) {
 		case config.TelemetryToArangoProcessorConfig:
-			processor, err := manager.initTelemetryToArangoProcessor(processorConfigType, inputResources, outputResources)
-			if err != nil {
-				return err
-			}
+			processor := NewTelemetryToArangoProcessor(processorConfigType, inputResources, outputResources, NewKafkaOpenConfigProcessor(), NewMinMaxNormalizer())
 			manager.processors[name] = processor
-		default:
-			return fmt.Errorf("unknown processor type: %v", processorConfigType)
 		}
 	}
 	return nil
