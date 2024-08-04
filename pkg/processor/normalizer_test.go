@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"math"
 	"reflect"
 	"testing"
 
@@ -182,11 +181,11 @@ func TestMinMaxNormalizer_getNormalizedValue(t *testing.T) {
 			wantNormalized: 0.5,
 		},
 		{
-			name:           "TestMinMaxNormalizer_getNormalizedValue success normalized value smaller 0 ",
+			name:           "TestMinMaxNormalizer_getNormalizedValue success normalized value smaller 0",
 			value:          2,
 			upperFence:     15,
 			lowerFence:     5,
-			wantNormalized: -math.MaxFloat64,
+			wantNormalized: 0.00001,
 		},
 		{
 			name:           "TestMinMaxNormalizer_getNormalizedValue success normalized value bigger than 1",

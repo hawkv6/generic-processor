@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 
 	"github.com/arangodb/go-driver"
 	"github.com/arangodb/go-driver/http"
@@ -88,7 +89,9 @@ func (output *ArangoOutput) updateField(field interface{}, value float64) {
 	case *float32:
 		*fieldType = float32(value)
 	case *float64:
-		*fieldType = value
+		formattedValue := strconv.FormatFloat(value, 'f', 5, 64)
+		parsedValue, _ := strconv.ParseFloat(formattedValue, 64)
+		*fieldType = parsedValue
 	default:
 		output.log.Errorf("Unsupported field type %t, ", fieldType)
 	}

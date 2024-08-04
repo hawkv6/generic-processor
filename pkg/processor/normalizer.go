@@ -73,7 +73,7 @@ func (normalizer *MinMaxNormalizer) getNormalizedValue(value float64, upperFence
 	if upperFence != lowerFence {
 		normalizedValue = (value - lowerFence) / (upperFence - lowerFence)
 		if normalizedValue <= 0 {
-			normalizedValue = -math.MaxFloat64 // arango does not accept zero value
+			normalizedValue = 0.00001 // arango does not accept zero value
 		} else if normalizedValue > 1 {
 			normalizedValue = 1
 		}
