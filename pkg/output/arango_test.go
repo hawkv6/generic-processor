@@ -156,22 +156,25 @@ func TestArangoOutput_updateField(t *testing.T) {
 	fieldUint32 := uint32(10)
 	fieldFloat32 := float32(10)
 	fieldFloat64 := float64(10)
+	field2Float64 := float64(0)
 
 	tests := []struct {
-		name         string
-		fieldUint32  *uint32
-		fieldUint64  *uint64
-		fieldFloat32 *float32
-		fieldFloat64 *float64
-		value        float64
+		name          string
+		fieldUint32   *uint32
+		fieldUint64   *uint64
+		fieldFloat32  *float32
+		fieldFloat64  *float64
+		field2Float64 *float64
+		value         float64
 	}{
 		{
-			name:         "TestArangoOutput_updateField ",
-			fieldUint32:  &fieldUint32,
-			fieldUint64:  &fieldUint64,
-			fieldFloat32: &fieldFloat32,
-			fieldFloat64: &fieldFloat64,
-			value:        10,
+			name:          "TestArangoOutput_updateField ",
+			fieldUint32:   &fieldUint32,
+			fieldUint64:   &fieldUint64,
+			fieldFloat32:  &fieldFloat32,
+			fieldFloat64:  &fieldFloat64,
+			field2Float64: &field2Float64,
+			value:         10,
 		},
 	}
 	for _, tt := range tests {
@@ -185,7 +188,9 @@ func TestArangoOutput_updateField(t *testing.T) {
 			assert.Equal(t, *tt.fieldFloat32, float32(tt.value))
 			output.updateField(tt.fieldFloat64, tt.value)
 			assert.Equal(t, *tt.fieldFloat64, tt.value)
-			output.updateField("10", tt.value)
+			output.updateField(tt.fieldFloat64, tt.value)
+			assert.Equal(t, *tt.fieldFloat64, tt.value)
+			output.updateField(tt.field2Float64, 0.00001)
 		})
 	}
 }

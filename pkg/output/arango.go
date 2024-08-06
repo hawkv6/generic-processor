@@ -91,6 +91,10 @@ func (output *ArangoOutput) updateField(field interface{}, value float64) {
 	case *float64:
 		formattedValue := strconv.FormatFloat(value, 'f', 5, 64)
 		parsedValue, _ := strconv.ParseFloat(formattedValue, 64)
+		if parsedValue <= 0 {
+			*fieldType = 0.00001
+			return
+		}
 		*fieldType = parsedValue
 	default:
 		output.log.Errorf("Unsupported field type %t, ", fieldType)
