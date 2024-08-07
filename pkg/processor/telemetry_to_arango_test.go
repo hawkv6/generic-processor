@@ -156,23 +156,32 @@ func TestTelemetryToArangoProcessor_startSchedulingInfluxCommands(t *testing.T) 
 			commandChan := make(chan message.Command)
 			wg := sync.WaitGroup{}
 			wg.Add(1)
-			go func() {
-				command := <-commandChan
-				influxQueryCommand := command.(message.InfluxQueryCommand)
-				assert.Equal(t, config.Modes[0].InputOptions["input"].Measurement, influxQueryCommand.Measurement)
-				assert.Equal(t, config.Modes[0].InputOptions["input"].Field, influxQueryCommand.Field)
-				assert.Equal(t, config.Modes[0].InputOptions["input"].Transformation.Operation, influxQueryCommand.Transformation.Operation)
-				assert.Equal(t, config.Modes[0].InputOptions["input"].Transformation.Period, influxQueryCommand.Transformation.Period)
-				assert.Equal(t, config.Modes[0].InputOptions["input"].Method, influxQueryCommand.Method)
-				assert.Equal(t, config.Modes[0].InputOptions["input"].GroupBy, influxQueryCommand.GroupBy)
-				assert.Equal(t, config.Interval, influxQueryCommand.Interval)
-				assert.Equal(t, config.Modes[0].OutputOptions, influxQueryCommand.OutputOptions)
-			}()
+			wg.Add(1)
 			go func() {
 				processor.startSchedulingInfluxCommands(config.Inputs[0], commandChan)
 				wg.Done()
 			}()
-			time.Sleep(1 * time.Second)
+			go func() {
+				defer wg.Done()
+				for {
+					select {
+					case <-processor.quitChan:
+						return
+					default:
+						command := <-commandChan
+						influxQueryCommand := command.(message.InfluxQueryCommand)
+						assert.Equal(t, config.Modes[0].InputOptions["input"].Measurement, influxQueryCommand.Measurement)
+						assert.Equal(t, config.Modes[0].InputOptions["input"].Field, influxQueryCommand.Field)
+						assert.Equal(t, config.Modes[0].InputOptions["input"].Transformation.Operation, influxQueryCommand.Transformation.Operation)
+						assert.Equal(t, config.Modes[0].InputOptions["input"].Transformation.Period, influxQueryCommand.Transformation.Period)
+						assert.Equal(t, config.Modes[0].InputOptions["input"].Method, influxQueryCommand.Method)
+						assert.Equal(t, config.Modes[0].InputOptions["input"].GroupBy, influxQueryCommand.GroupBy)
+						assert.Equal(t, config.Interval, influxQueryCommand.Interval)
+						assert.Equal(t, config.Modes[0].OutputOptions, influxQueryCommand.OutputOptions)
+					}
+				}
+			}()
+			time.Sleep(3 * time.Second)
 			close(processor.quitChan)
 			wg.Wait()
 		})
