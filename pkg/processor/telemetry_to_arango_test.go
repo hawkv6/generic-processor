@@ -155,7 +155,7 @@ func TestTelemetryToArangoProcessor_startSchedulingInfluxCommands(t *testing.T) 
 			processor := NewTelemetryToArangoProcessor(config, make(map[string]input.InputResource), make(map[string]output.OutputResource), NewKafkaOpenConfigProcessor(), NewMinMaxNormalizer())
 			commandChan := make(chan message.Command)
 			wg := sync.WaitGroup{}
-			wg.Add(2)
+			wg.Add(1)
 			go func() {
 				command := <-commandChan
 				influxQueryCommand := command.(message.InfluxQueryCommand)
@@ -167,7 +167,6 @@ func TestTelemetryToArangoProcessor_startSchedulingInfluxCommands(t *testing.T) 
 				assert.Equal(t, config.Modes[0].InputOptions["input"].GroupBy, influxQueryCommand.GroupBy)
 				assert.Equal(t, config.Interval, influxQueryCommand.Interval)
 				assert.Equal(t, config.Modes[0].OutputOptions, influxQueryCommand.OutputOptions)
-				wg.Done()
 			}()
 			go func() {
 				processor.startSchedulingInfluxCommands(config.Inputs[0], commandChan)
