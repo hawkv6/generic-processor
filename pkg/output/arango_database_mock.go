@@ -126,7 +126,7 @@ func (db *ArangoDatabaseMock) CreateGraphV2(ctx context.Context, name string, op
 	return nil, nil
 }
 
-func (db *ArangoDatabaseMock) EnsureAnalyzer(ctx context.Context, defintion driver.ArangoSearchAnalyzerDefinition) (bool, driver.ArangoSearchAnalyzer, error) {
+func (db *ArangoDatabaseMock) EnsureAnalyzer(ctx context.Context, definition driver.ArangoSearchAnalyzerDefinition) (bool, driver.ArangoSearchAnalyzer, error) {
 	return false, nil, nil
 }
 
