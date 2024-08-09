@@ -19,7 +19,6 @@ $ hawkeye validate -c <path-to-config-file>
 
 Start the generic processor 
 $ hawkeye start -c <path-to-config-file>
-}
 `,
 }
 
