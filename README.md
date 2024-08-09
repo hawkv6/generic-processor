@@ -28,7 +28,7 @@ The generic processor operates based on a validated configuration file, which in
 - **processor manager**: Executes processing tasks as defined in the configuration.
 - **output manager**: Handles the delivery of processed data to designated outputs.
 
-Each component runs independently in separate Go routines, with communication primarily handled via channels. The configuration file also supports defining the same processor multiple times under different names, enabling parallel processing of the same data in different ways.
+Each component operates independently in separate Go routines, with communication primarily managed through channels. The generic processor is designed around a command-result pattern, where elements receive specific commands and return corresponding results. The configuration file also allows the same processor to be defined multiple times under different names, enabling parallel processing of the same data in various ways.
 
 ## Usage
 
@@ -74,4 +74,5 @@ sudo ./bin/generic-processor
 
 
 ## Additional Information
-- Environment variables are documented in the [`env file`](docs/env.md) .
+- Environment variables are documented in the [`env file`](docs/env.md).
+- An example configuration can be found in the `config` folder.
