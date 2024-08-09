@@ -17,14 +17,30 @@ The telemetry to Arango processor consists of several key components:
 
 - **Kafka Producer**: Produces and sends messages about updated links to inform other systems of the changes. Additionally, it sends normalization data to Kafka, which is then forwarded to InfluxDB.
 
-- **Normalization Process**: The processor applies IQR-based min-max normalization to the telemetry data. This process involves the following steps:
-  - **Interquartile Range Calculation**: The processor calculates the interquartile range (IQR) of the data, which is the range between the 25th percentile (Q1) and the 75th percentile (Q3).
-  - **Min-Max Adjustment**: Using the IQR, the processor adjusts the minimum and maximum values for the data fields. This adjustment helps in reducing the impact of outliers by focusing on the more central data points.
-  - **Data Normalization**: The adjusted min and max values are used to normalize the data fields, ensuring that the data remains within a defined range and is less sensitive to extreme values.
+These components work together to enrich links with data from InfluxDB, enhancing the overall dataset.
 
-  The normalized data is then updated in the ArangoDB graph database and sent as normalized metrics to Kafka. This ensures that the data is consistently formatted and ready for accurate analysis.
+## Normalization Process
 
-These components work together to enrich links with data from InfluxDB, enhancing the overall dataset and ensuring that the data is robustly normalized, making it more reliable for downstream processes.
+The telemetry to Arango processor applies IQR-based min-max normalization to the telemetry data to ensure consistent and reliable data formatting. The normalization process consists of the following steps:
+
+### Interquartile Range (IQR) Calculation
+- The processor calculates the quartiles (Q1, Q2/Median, and Q3) of the data.
+- The **Interquartile Range (IQR)** is calculated as the difference between Q3 and Q1, representing the range within which the middle 50% of the data lies.
+  
+### Fence Calculation
+- **Lower Fence**: Calculated as `Q1 - 1.5 * IQR`, but adjusted to be no less than the minimum value in the data set.
+- **Upper Fence**: Calculated as `Q3 + 1.5 * IQR`, but adjusted to be no greater than the maximum value in the data set.
+
+This adjustment ensures that the fences are within the actual data range, preventing extreme values from unduly influencing the normalization process.
+
+### Normalization to [0, 1] Interval
+- **Value Mapping**: Each data point is mapped to a value between 0 and 1 based on its position relative to the lower and upper fences.
+- **Handling Out-of-Bounds Values**:
+  - Values below the lower fence are normalized to a small positive value (e.g., 0.00001) because ArangoDB does not accept zero as a valid value.
+  - Values above the upper fence are normalized to 1.
+
+This approach ensures that all data points are normalized to the [0, 1] interval, making the data consistent and easier to analyze. This normalization is crucial for performing accurate weighted shortest path calculations, where normalized weights allow for proper comparison and routing decisions, while also managing outliers effectively.
+
 
 
 ## Prerequisites
