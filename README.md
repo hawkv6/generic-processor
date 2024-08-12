@@ -56,7 +56,7 @@ docker run --rm -v "hawkv6/generic-processor/config/:/config" -e HAWKV6_GENERIC_
 ```
 git clone https://github.com/hawkv6/generic-processor
 cd generic-processor && make binary
-sudo ./bin/generic-processor
+./bin/generic-processor
 ```
 
 ## Getting Started
