@@ -66,15 +66,17 @@ cd generic-processor && make binary
 ## Getting Started
 
 1. Deploy all necessary Kubernetes resources.
-   - For more details, refer to the [hawkv6 deployment guide](https://github.com/hawkv6/deployment).
+   - For more details, refer to the [hawkv6 deployment documentation](https://github.com/hawkv6/deployment).
 
 2. Ensure the network is properly configured and operational.
-   - Additional information can be found in the [hawkv6 testnetwork guide](https://github.com/hawkv6/network).
+   - Additional information can be found in the [hawkv6 testnetwork documentation](https://github.com/hawkv6/network).
 
 3. Confirm that `clab-telemetry-linker` is active and running.
-   - Detailed instructions are available in the [clab-telemetry-linker guide](https://github.com/hawkv6/generic-processor).
+   - Detailed instructions are available in the [clab-telemetry-linker documentation](https://github.com/hawkv6/generic-processor).
 
-4. Launch the generic processor with a valid configuration file.
+4. Install the generic processor using one of the methods described above.
+
+5. Launch the generic processor using the `start` command.
 
 
 ## Additional Information
