@@ -31,9 +31,13 @@ The generic processor operates based on a validated configuration file, which in
 Each component operates independently in separate Go routines, with communication primarily managed through channels. The generic processor is designed around a command-result pattern, where elements receive specific commands and return corresponding results. The configuration file also allows the same processor to be defined multiple times under different names, enabling parallel processing of the same data in various ways.
 
 ## Usage
-
+```
+generic-processor [command]
+```
+### Commands
 - Validate the configuration file: [`validate`](/docs/commands/validate.md)
 - Start the generic processor: [`start`](/docs/commands/start.md)
+- Print the version `version`
 
 ## Available Processors
 - [Telemetry to Arango Processor](docs/processors/telemetry-to-arango.md)
