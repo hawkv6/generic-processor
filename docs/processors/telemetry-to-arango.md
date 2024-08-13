@@ -48,7 +48,7 @@ The normalized values in the right image show a stark contrast compared to the o
 
 Original Jitter and Packet Loss Metrics             |  Normalized Jitter and Packet Loss Metrics
 :-------------------------:|:-------------------------:
-![Original Jitter and Packet Loss Metrics](../images/original_metrics.png)) |  ![Normalized Jitter and Packet Loss Metrics](../images/normalized_metrics.png)
+![Original Jitter and Packet Loss Metrics](../images/original_metrics.png) |  ![Normalized Jitter and Packet Loss Metrics](../images/normalized_metrics.png)
 
 ## Prerequisites
 Ensure you have the Kafka, Influx and Kafka up and running. For further documentation look at the [deployment guide](https://github.com/hawkv6/deployment) to install and configure the K8S resources.
