@@ -21,7 +21,8 @@ These components work together to enrich links with data from InfluxDB, enhancin
 
 ## Normalization Process
 
-The telemetry to Arango processor applies IQR-based min-max normalization to the telemetry data to ensure consistent and reliable data formatting. The normalization process consists of the following steps:
+The telemetry to Arango processor applies IQR-based min-max normalization to latency, jitter and packet loss metrics so that they can be combined in a weighted dijkstra algorithm. The normalization analyzes the network data monitored in the last interval and normalizes the data to a [0, 1] interval.
+The normalization process involves the following steps: 
 
 ### Interquartile Range (IQR) Calculation
 - The processor calculates the quartiles (Q1, Q2/Median, and Q3) of the data.
@@ -41,7 +42,13 @@ This adjustment ensures that the fences are within the actual data range, preven
 
 This approach ensures that all data points are normalized to the [0, 1] interval, making the data consistent and easier to analyze. This normalization is crucial for performing accurate weighted shortest path calculations, where normalized weights allow for proper comparison and routing decisions, while also managing outliers effectively.
 
+### Example
+In the example below, the original jitter and packet loss metrics are normalized using the IQR-based min-max normalization process.
+The normalized values in the right image show a stark contrast compared to the original values in the left image, making them more suitable for combined calculations. Packet loss values, which are barely visible in the left image, are mapped to values close to 1 in the right image, highlighting the higher packet loss relative to other network measurements. The handling of outliers is also evident; for instance, links 5 and 7 in the left image exceed the normalization upper fence and are both mapped to 1 in the right image.
 
+Original Jitter and Packet Loss Metrics             |  Normalized Jitter and Packet Loss Metrics
+:-------------------------:|:-------------------------:
+![Original Jitter and Packet Loss Metrics](../images/original_metrics.png)) |  ![Normalized Jitter and Packet Loss Metrics](../images/normalized_metrics.png)
 
 ## Prerequisites
 Ensure you have the Kafka, Influx and Kafka up and running. For further documentation look at the [deployment guide](https://github.com/hawkv6/deployment) to install and configure the K8S resources.
