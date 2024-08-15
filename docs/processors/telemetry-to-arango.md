@@ -5,7 +5,7 @@ The Telemetry to Arango Processor is designed to enrich BMP data stored in the g
 
 ![Telemetry To Arango Processor Overview](../images/telemetry-to-arango-processor-overview.drawio.svg)
 
-## Functionality
+## Components
 
 The telemetry to Arango processor consists of several key components:
 
@@ -18,6 +18,15 @@ The telemetry to Arango processor consists of several key components:
 - **Kafka Producer**: Produces and sends messages about updated links to inform other systems of the changes. Additionally, it sends normalization data to Kafka, which is then forwarded to InfluxDB.
 
 These components work together to enrich links with data from InfluxDB, enhancing the overall dataset.
+
+## Functionality
+The Telemetry to Arango Processor enriches BMP data stored in the graph database with additional data received via streaming telemetry (MDT/YANG-PUSH). This ensures comprehensive data processing by combining link data stored in Jalapeno's graph database with performance measurement data from Jalapeno's time series database.
+
+Network link data received via BMP contains interface IPv6 addresses but lacks interface names, while performance measurements received via streaming telemetry include interface names but no IPv6 addresses. Bridging these two data sets involves configuring network devices to send information about interfaces, including names, status, IPv6 addresses, and related changes via streaming telemetry.
+
+The processor retrieves this status information through Jalapeno, allowing it to correlate the two data collections. The service maps performance measurements to the interface name and subsequently maps the interface name to the IPv6 address. The IPv6 address is then used to locate the appropriate link entry in the graph database and append the network's latest performance data.
+
+The processor can perform various operations, such as calculating the mean, median, maximum, and minimum, or obtaining the last measurement of a dataset within a specific period. These operations are performed repeatedly at intervals defined by the operator, ensuring continuous updates and accurate data representation in the system. This capability renders the processor versatile, enabling efficient data integration into the graph database.
 
 ## Normalization Process
 
