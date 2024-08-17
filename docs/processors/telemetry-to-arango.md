@@ -28,7 +28,25 @@ The processor retrieves this status information through Jalapeno, allowing it to
 
 The processor can perform various operations, such as calculating the mean, median, maximum, and minimum, or obtaining the last measurement of a dataset within a specific period. These operations are performed repeatedly at intervals defined by the operator, ensuring continuous updates and accurate data representation in the system. This capability renders the processor versatile, enabling efficient data integration into the graph database.
 
-## Standard Format
+## Data Format
+Typically, performance measurement values are collected by hardware and transmitted via BMP. The generic-processor adapts the standard data format from [gobmp](https://github.com/sbezverk/gobmp), ensuring consistent data structures. This consistency facilitates seamless integration with hardware and uniformity in data collection, whether metrics are gathered directly via BMP or processed through the generic-processor.
+
+The following fields are affected by this standardization:
+
+- `unidir_link_delay`
+- `unidir_link_delay_min_max`
+- `unidir_available_bw`
+- `unidir_delay_variation`
+- `unidir_bw_utilization`
+
+Further analysis is required to determine whether exporting performance measurement data via streaming telemetry and performing external analysis yields better results than local calculations on network routers. However, this aspect falls outside the scope of this project.
+
+For more information, refer to the following RFCs:
+- [RFC 8570](https://datatracker.ietf.org/doc/rfc8570/)
+- [RFC 9085](https://datatracker.ietf.org/doc/html/rfc9085)
+- [RFC 9356](https://datatracker.ietf.org/doc/html/rfc9356)
+- [RFC 8571](https://datatracker.ietf.org/doc/html/rfc8571)
+
 
 
 ## Normalization Process
