@@ -28,6 +28,9 @@ The processor retrieves this status information through Jalapeno, allowing it to
 
 The processor can perform various operations, such as calculating the mean, median, maximum, and minimum, or obtaining the last measurement of a dataset within a specific period. These operations are performed repeatedly at intervals defined by the operator, ensuring continuous updates and accurate data representation in the system. This capability renders the processor versatile, enabling efficient data integration into the graph database.
 
+## Standard Format
+
+
 ## Normalization Process
 
 The telemetry to Arango processor applies IQR-based min-max normalization to latency, jitter and packet loss metrics so that they can be combined in a weighted dijkstra algorithm. The normalization analyzes the network data monitored in the last interval and normalizes the data to a [0, 1] interval.
