@@ -81,4 +81,4 @@ cd generic-processor && make binary
 
 ## Additional Information
 - Environment variables are documented in the [`env documentation`](docs/env.md).
-- An example configuration can be found in the `config` folder.
+- An example configuration can be found in the [`config`](config) folder.

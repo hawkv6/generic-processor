@@ -51,7 +51,7 @@ For more information, refer to the following RFCs:
 
 ## Normalization Process
 
-The telemetry to Arango processor applies IQR-based min-max normalization to latency, jitter and packet loss metrics so that they can be combined in a weighted dijkstra algorithm. The normalization analyzes the network data monitored in the last interval and normalizes the data to a [0, 1] interval.
+The telemetry to Arango processor applies IQR-based min-max normalization to latency, jitter and packet loss metrics so that they can be combined in a weighted dijkstra algorithm by the HawkEye controller. The normalization analyzes the network data monitored in the last interval and normalizes the data to a [0, 1] interval.
 The normalization process involves the following steps: 
 
 ### Interquartile Range (IQR) Calculation
@@ -62,7 +62,7 @@ The normalization process involves the following steps:
 - **Lower Fence**: Calculated as `Q1 - 1.5 * IQR`, but adjusted to be no less than the minimum value in the data set.
 - **Upper Fence**: Calculated as `Q3 + 1.5 * IQR`, but adjusted to be no greater than the maximum value in the data set.
 
-This adjustment ensures that the fences are within the actual data range, preventing extreme values from unduly influencing the normalization process.
+This adjustment ensures that the fences are within the actual data range, preventing extreme values from influencing the normalization process.
 
 ### Normalization to [0, 1] Interval
 - **Value Mapping**: Each data point is mapped to a value between 0 and 1 based on its position relative to the lower and upper fences.
@@ -81,12 +81,12 @@ Original Jitter and Packet Loss Metrics             |  Normalized Jitter and Pac
 ![Original Jitter and Packet Loss Metrics](../images/original_metrics.png) |  ![Normalized Jitter and Packet Loss Metrics](../images/normalized_metrics.png)
 
 ## Prerequisites
-Ensure you have the Kafka, Influx and Kafka up and running. For further documentation look at the [deployment guide](https://github.com/hawkv6/deployment) to install and configure the K8S resources.
+Ensure you have Jalapeno's Kafka, Influx and Arago DB up and running. For further documentation look at the [deployment guide](https://github.com/hawkv6/deployment) to install and configure the K8S resources.
 
 
 ## Configuration
 
-The following configuration parameters are required for the telemetry to Arango processor.
+The following configuration parameters are required for the telemetry to Arango processor. An example configuration can be found in the [`config`](../../config/) folder.
 
 ### Input Configuration
 
@@ -159,7 +159,7 @@ This Kafka output configuration is used to send normalized telemetry metrics.
         - **filter_by**: List the fields to filter the data by before updating (e.g., `local_link_ip`).
         - **field**: The field in the ArangoDB collection to update with the processed data.
 
-This processor configuration defines how telemetry data is processed, including mapping fields from InfluxDB measurements to corresponding fields in ArangoDB collections. An example configuration can be found in the `config` folder.
+This processor configuration defines how telemetry data is processed, including mapping fields from InfluxDB measurements to corresponding fields in ArangoDB collections. 
 
 ### YANG Models
 
