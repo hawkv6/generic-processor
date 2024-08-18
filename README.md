@@ -53,7 +53,10 @@ sudo apt install ./generic_processor_{version}_amd64.deb
 
 ### Using Docker 
 ```
-docker run --rm -v "hawkv6/generic-processor/config/:/config" -e HAWKV6_GENERIC_PROCESSOR_CONFIG=/config/example-config.yaml ghcr.io/hawkv6/generic-processor:latest start
+docker run --rm \
+-v "hawkv6/generic-processor/config/:/config" \
+-e HAWKV6_GENERIC_PROCESSOR_CONFIG=/config/example-config.yaml \ 
+ghcr.io/hawkv6/generic-processor:latest start
 ```
 
 ### Using Binary
