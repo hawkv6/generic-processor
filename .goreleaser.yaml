@@ -1,0 +1,32 @@
+project_name: generic-processor
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./generic-processor/
+    binary: generic-processor
+    ldflags:
+      - -s -w -X main.build={{.Version}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+
+dockers:
+  - use: buildx
+    dockerfile: ./build/package/Dockerfile
+    image_templates:
+      - "ghcr.io/hawkv6/generic-processor:latest"
+      - "ghcr.io/hawkv6/generic-processor:{{ .Tag }}"
+
+nfpms:
+  - maintainer: Severin Dellsperger <severin.dellsperger@ost.ch>
+    description: Take data from specific inputs, processing it as required, and writing it to defined outputs
+    homepage: https://github.com/hawkv6/generic-processor 
+    license: Apache 2.0
+    formats:
+      - deb

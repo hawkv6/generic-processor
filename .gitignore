@@ -9,7 +9,8 @@
 *.dylib
 
 # built binary
-generic-processor
+bin
+!build
 
 # Test binary, built with `go test -c`
 *.test
@@ -25,3 +26,6 @@ go.work
 
 #VSCode
 .vscode
+
+# Debug
+__debug*

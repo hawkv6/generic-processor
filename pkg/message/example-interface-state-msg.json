@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "admin_status": "UP",
+    "counters/carrier_transitions": 11,
+    "cpu": "false",
+    "delete": false,
+    "description": "to Site-A",
+    "enabled": "true",
+    "ifindex": 3,
+    "last_change": 1705765150360464275,
+    "logical": "false",
+    "loopback_mode": "false",
+    "management": "false",
+    "mtu": 1514,
+    "name": "GigabitEthernet0/0/0/0",
+    "oper_status": "UP",
+    "type": "iana-if-type:ethernetCsmacd"
+  },
+  "name": "openconfig-interfaces:interfaces/interface/state",
+  "tags": {
+    "host": "telegraf",
+    "name": "GigabitEthernet0/0/0/0",
+    "path": "openconfig-interfaces:interfaces/interface/state",
+    "source": "XR-1",
+    "subscription": "test"
+  },
+  "timestamp": 1706530902
+}

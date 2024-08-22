@@ -1,0 +1,8 @@
+{
+  "deployment": {
+    "files": {
+      "my-resource-file1": {
+        "sourceUrl": "https://storage.googleapis.com/[MY_BUCKET_ID]/my-application/my-resource-file1"
+//       }
+//     }
+// }
