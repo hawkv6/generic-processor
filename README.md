@@ -75,7 +75,7 @@ cd generic-processor && make binary
    - Additional information can be found in the [hawkv6 testnetwork documentation](https://github.com/hawkv6/network).
 
 3. Confirm that `clab-telemetry-linker` is active and running.
-   - Detailed instructions are available in the [clab-telemetry-linker documentation](https://github.com/hawkv6/generic-processor).
+   - Detailed instructions are available in the [clab-telemetry-linker documentation](https://github.com/hawkv6/clab-telemetry-linker).
 
 4. Install the generic processor using one of the methods described above.
 
